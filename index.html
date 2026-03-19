@@ -21,6 +21,9 @@
   --r:20px;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* Rimuove ritardo 300ms tap su mobile su tutti gli elementi cliccabili */
+a,button,div[onclick],div[class*="btn"],div[class*="key"],div[class*="widget"],
+div[class*="tab"],div[class*="icon"]{touch-action:manipulation;}
 html,body{height:100%;width:100%;overflow:hidden}
 body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);
   display:flex;flex-direction:column;position:relative}
@@ -84,10 +87,18 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);
   border:1px solid rgba(255,255,255,.08);
   font-size:24px;font-weight:600;color:var(--text);cursor:pointer;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  transition:background .15s,transform .1s;user-select:none;
+  transition:background .08s,transform .08s,box-shadow .08s;user-select:none;
   backdrop-filter:blur(10px);
+  /* Rimuove il ritardo 300ms su mobile */
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
 }
-.pin-key:active{background:rgba(255,255,255,.15);transform:scale(.93)}
+.pin-key:active{
+  background:rgba(108,142,255,.35);
+  transform:scale(.88);
+  box-shadow:0 0 0 3px rgba(108,142,255,.25);
+  border-color:rgba(108,142,255,.5);
+}
 .pin-key-sub{font-size:8px;color:var(--text2);letter-spacing:1.5px;text-transform:uppercase;margin-top:2px}
 .pin-key.empty,.pin-key.empty:active{background:transparent;border:none;transform:none;cursor:default}
 
@@ -668,7 +679,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);
   <div class="lock-brand">
     <div class="lock-brand-icon">🌱</div>
     <div class="lock-brand-name">My Life</div>
-    <div class="lock-brand-sub" id="lock-sub">Inserisci il tuo PIN</div>
+    <div class="lock-brand-sub" id="lock-sub">La tua privacy, sulla chain, per sempre</div>
   </div>
   <div class="pin-dots" id="pin-dots">
     <div class="pin-dot" id="d0"></div><div class="pin-dot" id="d1"></div>
@@ -676,18 +687,18 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);
     <div class="pin-dot" id="d4"></div><div class="pin-dot" id="d5"></div>
   </div>
   <div class="pin-pad">
-    <div class="pin-key" onclick="pinKey('1')">1</div>
-    <div class="pin-key" onclick="pinKey('2')">2<div class="pin-key-sub">ABC</div></div>
-    <div class="pin-key" onclick="pinKey('3')">3<div class="pin-key-sub">DEF</div></div>
-    <div class="pin-key" onclick="pinKey('4')">4<div class="pin-key-sub">GHI</div></div>
-    <div class="pin-key" onclick="pinKey('5')">5<div class="pin-key-sub">JKL</div></div>
-    <div class="pin-key" onclick="pinKey('6')">6<div class="pin-key-sub">MNO</div></div>
-    <div class="pin-key" onclick="pinKey('7')">7<div class="pin-key-sub">PQRS</div></div>
-    <div class="pin-key" onclick="pinKey('8')">8<div class="pin-key-sub">TUV</div></div>
-    <div class="pin-key" onclick="pinKey('9')">9<div class="pin-key-sub">WXYZ</div></div>
+    <div class="pin-key" data-fn="pinKey" data-val="1">1</div>
+    <div class="pin-key" data-fn="pinKey" data-val="2">2<div class="pin-key-sub">ABC</div></div>
+    <div class="pin-key" data-fn="pinKey" data-val="3">3<div class="pin-key-sub">DEF</div></div>
+    <div class="pin-key" data-fn="pinKey" data-val="4">4<div class="pin-key-sub">GHI</div></div>
+    <div class="pin-key" data-fn="pinKey" data-val="5">5<div class="pin-key-sub">JKL</div></div>
+    <div class="pin-key" data-fn="pinKey" data-val="6">6<div class="pin-key-sub">MNO</div></div>
+    <div class="pin-key" data-fn="pinKey" data-val="7">7<div class="pin-key-sub">PQRS</div></div>
+    <div class="pin-key" data-fn="pinKey" data-val="8">8<div class="pin-key-sub">TUV</div></div>
+    <div class="pin-key" data-fn="pinKey" data-val="9">9<div class="pin-key-sub">WXYZ</div></div>
     <div class="pin-key empty"></div>
-    <div class="pin-key" onclick="pinKey('0')">0</div>
-    <div class="pin-key" onclick="pinDel()">⌫</div>
+    <div class="pin-key" data-fn="pinKey" data-val="0">0</div>
+    <div class="pin-key" data-fn="pinDel">⌫</div>
   </div>
   <div class="lock-footer">
     <span class="lock-link" onclick="showRecovery()">Hai dimenticato il PIN?</span>
@@ -717,13 +728,13 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);
       <div class="pin-dot" id="sd4"></div><div class="pin-dot" id="sd5"></div>
     </div>
     <div class="pin-pad">
-      <div class="pin-key" onclick="setupKey('1')">1</div><div class="pin-key" onclick="setupKey('2')">2</div>
-      <div class="pin-key" onclick="setupKey('3')">3</div><div class="pin-key" onclick="setupKey('4')">4</div>
-      <div class="pin-key" onclick="setupKey('5')">5</div><div class="pin-key" onclick="setupKey('6')">6</div>
-      <div class="pin-key" onclick="setupKey('7')">7</div><div class="pin-key" onclick="setupKey('8')">8</div>
-      <div class="pin-key" onclick="setupKey('9')">9</div>
-      <div class="pin-key empty"></div><div class="pin-key" onclick="setupKey('0')">0</div>
-      <div class="pin-key" onclick="setupDel()">⌫</div>
+      <div class="pin-key" data-fn="setupKey" data-val="1">1</div><div class="pin-key" data-fn="setupKey" data-val="2">2</div>
+      <div class="pin-key" data-fn="setupKey" data-val="3">3</div><div class="pin-key" data-fn="setupKey" data-val="4">4</div>
+      <div class="pin-key" data-fn="setupKey" data-val="5">5</div><div class="pin-key" data-fn="setupKey" data-val="6">6</div>
+      <div class="pin-key" data-fn="setupKey" data-val="7">7</div><div class="pin-key" data-fn="setupKey" data-val="8">8</div>
+      <div class="pin-key" data-fn="setupKey" data-val="9">9</div>
+      <div class="pin-key empty"></div><div class="pin-key" data-fn="setupKey" data-val="0">0</div>
+      <div class="pin-key" data-fn="setupDel">⌫</div>
     </div>
   </div>
   <div class="wizard-step" id="step-confirm">
@@ -737,13 +748,13 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);
       <div class="pin-dot" id="cd4"></div><div class="pin-dot" id="cd5"></div>
     </div>
     <div class="pin-pad">
-      <div class="pin-key" onclick="confirmKey('1')">1</div><div class="pin-key" onclick="confirmKey('2')">2</div>
-      <div class="pin-key" onclick="confirmKey('3')">3</div><div class="pin-key" onclick="confirmKey('4')">4</div>
-      <div class="pin-key" onclick="confirmKey('5')">5</div><div class="pin-key" onclick="confirmKey('6')">6</div>
-      <div class="pin-key" onclick="confirmKey('7')">7</div><div class="pin-key" onclick="confirmKey('8')">8</div>
-      <div class="pin-key" onclick="confirmKey('9')">9</div>
-      <div class="pin-key empty"></div><div class="pin-key" onclick="confirmKey('0')">0</div>
-      <div class="pin-key" onclick="confirmDel()">⌫</div>
+      <div class="pin-key" data-fn="confirmKey" data-val="1">1</div><div class="pin-key" data-fn="confirmKey" data-val="2">2</div>
+      <div class="pin-key" data-fn="confirmKey" data-val="3">3</div><div class="pin-key" data-fn="confirmKey" data-val="4">4</div>
+      <div class="pin-key" data-fn="confirmKey" data-val="5">5</div><div class="pin-key" data-fn="confirmKey" data-val="6">6</div>
+      <div class="pin-key" data-fn="confirmKey" data-val="7">7</div><div class="pin-key" data-fn="confirmKey" data-val="8">8</div>
+      <div class="pin-key" data-fn="confirmKey" data-val="9">9</div>
+      <div class="pin-key empty"></div><div class="pin-key" data-fn="confirmKey" data-val="0">0</div>
+      <div class="pin-key" data-fn="confirmDel">⌫</div>
     </div>
   </div>
   <div class="wizard-step" id="step-phrase">
@@ -1117,6 +1128,48 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);
 <input type="file" id="input-note-img" accept="image/*" style="display:none" onchange="onNoteImg(this)">
 
 <script>
+// ═══════════════════════════════════════════════
+// PIN KEY TOUCH HANDLER — risposta immediata su mobile
+// ═══════════════════════════════════════════════
+(function(){
+  // Mappa funzioni per i tasti PIN
+  const FN = {
+    pinKey, pinDel, setupKey, setupDel, confirmKey, confirmDel
+  };
+
+  function handlePinKey(el, e) {
+    if (el.classList.contains('empty')) return;
+    e.preventDefault(); // blocca il click successivo su mobile
+
+    // Feedback visivo immediato
+    el.classList.add('pressed');
+    setTimeout(() => el.classList.remove('pressed'), 150);
+
+    // Vibrazione leggera se disponibile
+    if (navigator.vibrate) navigator.vibrate(10);
+
+    // Esegui la funzione
+    const fn = el.dataset.fn;
+    const val = el.dataset.val;
+    if (fn && FN[fn]) {
+      if (val !== undefined) FN[fn](val);
+      else FN[fn]();
+    }
+  }
+
+  document.addEventListener('touchstart', e => {
+    const key = e.target.closest('.pin-key');
+    if (key) handlePinKey(key, e);
+  }, {passive: false});
+
+  // Fallback click per desktop
+  document.addEventListener('click', e => {
+    const key = e.target.closest('.pin-key');
+    if (!key || key._touchHandled) return;
+    handlePinKey(key, e);
+  });
+})();
+
 // ═══════════════════════════════════════════════
 // WORDLIST
 // ═══════════════════════════════════════════════
