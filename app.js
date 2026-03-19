@@ -165,31 +165,43 @@ window.addEventListener('load', async () => {
 let _pinLocked = false; // blocca il pad durante la verifica crypto
 
 async function pinKey(d) {
-  if (_pinLocked) return;           // ignora tap durante verifica
+  if (_pinLocked) return;
   if (S.lockPin.length >= 6) return;
   S.lockPin += d;
   dots('pin-dots', S.lockPin.length, false);
 
   if (S.lockPin.length === 6) {
     _pinLocked = true;
-
-    // Mostra spinner subito — PBKDF2 prende ~1-2 secondi
     document.getElementById('lock-sub').textContent = '🔓 Verifica in corso...';
-    dotsSpinner('pin-dots');         // anima i pallini
+    dotsSpinner('pin-dots');
 
-    // Cede il controllo al browser per renderizzare prima di bloccarsi con crypto
+    // Cede il controllo al browser per aggiornare l'UI prima della crypto
     await new Promise(r => setTimeout(r, 30));
 
-    const ok = await CE.unlock(S.lockPin);
+    let ok = false;
+    try {
+      // Timeout di sicurezza: se impiega più di 5 secondi, mostra errore
+      const result = await Promise.race([
+        CE.unlock(S.lockPin),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+      ]);
+      ok = result;
+    } catch (err) {
+      console.error('unlock error:', err);
+      ok = false;
+    }
 
     if (ok) {
       dotsSuccess('pin-dots');
-      await new Promise(r => setTimeout(r, 200)); // breve pausa visiva
+      await new Promise(r => setTimeout(r, 200));
       await unlockApp();
     } else {
       dots('pin-dots', 6, true);
-      document.getElementById('lock-sub').textContent = 'PIN errato. Riprova.';
-      if (navigator.vibrate) navigator.vibrate([80, 40, 80]); // vibrazione errore
+      const msg = S.lockPin === '------'
+        ? 'Errore. Riprova.'
+        : 'PIN errato. Riprova.';
+      document.getElementById('lock-sub').textContent = msg;
+      if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
       setTimeout(() => {
         S.lockPin = '';
         _pinLocked = false;
