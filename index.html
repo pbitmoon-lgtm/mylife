@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#070710">
+<title>My Life</title>
+
+<!-- External dependencies -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+<!-- App styles -->
+<style>
+:root {
+  --bg:#070710; --surface:rgba(255,255,255,.06); --surface2:rgba(255,255,255,.1);
+  --border:rgba(255,255,255,.09); --border2:rgba(255,255,255,.15);
+  --text:#f4f4fb; --text2:#9090b8; --text3:#55556a;
+  --accent:#6c8eff; --accent2:#9b7fff; --green:#34d69e;
+  --red:#ff6060; --warn:#ffb340; --yellow:#ffe066; --pink:#ff6eb4;
+  --r:20px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* Rimuove ritardo 300ms tap su mobile su tutti gli elementi cliccabili */
+a,button,div[onclick],div[class*="btn"],div[class*="key"],div[class*="widget"],
+div[class*="tab"],div[class*="icon"]{touch-action:manipulation;}
+html,body{height:100%;width:100%;overflow:hidden}
+body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);
+  display:flex;flex-direction:column;position:relative}
+
+/* ══════════════════════════════════════════
+   BACKGROUND MESH
+══════════════════════════════════════════ */
+#bg-mesh{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 0%, rgba(108,142,255,.18) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 100%, rgba(155,127,255,.15) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 40% at 50% 50%, rgba(52,214,158,.06) 0%, transparent 70%),
+    #070710;
+}
+#bg-mesh::after{
+  content:'';position:absolute;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* ══════════════════════════════════════════
+   SCREENS CONTAINER
+══════════════════════════════════════════ */
+.screen{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;
+  opacity:0;pointer-events:none;transition:opacity .3s ease, transform .3s ease}
+.screen.active{opacity:1;pointer-events:all;transform:none}
+.screen.slide-up{transform:translateY(30px)}
+.screen.slide-right{transform:translateX(-30px)}
+
+/* ══════════════════════════════════════════
+   LOCK SCREEN
+══════════════════════════════════════════ */
+#lock-screen{background:transparent;align-items:center;justify-content:center;gap:0}
+
+.lock-brand{text-align:center;margin-bottom:48px}
+.lock-brand-icon{
+  width:72px;height:72px;border-radius:22px;margin:0 auto 16px;
+  background:linear-gradient(135deg,rgba(108,142,255,.3),rgba(155,127,255,.3));
+  border:1px solid rgba(255,255,255,.15);
+  display:flex;align-items:center;justify-content:center;font-size:36px;
+  box-shadow:0 8px 32px rgba(108,142,255,.2);
+  animation:floatIcon 3s ease-in-out infinite;
+}
+@keyframes floatIcon{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.lock-brand-name{font-size:28px;font-weight:800;letter-spacing:-.5px;
+  background:linear-gradient(135deg,#fff 0%,rgba(255,255,255,.6) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.lock-brand-sub{font-size:13px;color:var(--text2);margin-top:4px;letter-spacing:.3px}
+
+.pin-dots{display:flex;gap:16px;margin-bottom:44px}
+.pin-dot{width:14px;height:14px;border-radius:50%;
+  border:2px solid rgba(255,255,255,.2);transition:all .2s cubic-bezier(.34,1.56,.64,1)}
+.pin-dot.filled{background:var(--accent);border-color:var(--accent);
+  transform:scale(1.15);box-shadow:0 0 12px rgba(108,142,255,.6)}
+.pin-dot.error{background:var(--red);border-color:var(--red);animation:shake .4s ease}
+
+.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:260px}
+.pin-key{
+  height:72px;min-height:72px;
+  border-radius:18px;
+  width:100%;
+  background:rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.08);
+  font-size:24px;font-weight:600;color:var(--text);cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  transition:background .08s,transform .08s,box-shadow .08s;
+  user-select:none;-webkit-user-select:none;
+  backdrop-filter:blur(10px);
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+  position:relative;overflow:hidden;
+}
+/* Pseudo-elemento trasparente che copre TUTTA l'area — nessuna zona morta */
+.pin-key::after{
+  content:'';
+  position:absolute;
+  inset:-4px;  /* 4px extra oltre il bordo */
+  border-radius:20px;
+}
+/* Feedback visivo: sia :active nativo che classe .pressed da JS */
+.pin-key:active,
+.pin-key.pressed{
+  background:rgba(108,142,255,.35) !important;
+  transform:scale(.88) !important;
+  box-shadow:0 0 0 3px rgba(108,142,255,.25) !important;
+  border-color:rgba(108,142,255,.5) !important;
+}
+/* I figli NON intercettano eventi touch — tutto sale al .pin-key */
+.pin-key *{
+  pointer-events:none;
+}
+.pin-key *{
+  /* Tutti i figli non intercettano il tocco — passa sempre al tasto padre */
+  pointer-events:none;
+  user-select:none;
+}
+.pin-key-sub{
+  font-size:8px;color:rgba(255,255,255,.4);
+  letter-spacing:1.5px;text-transform:uppercase;margin-top:2px;
+}
+.pin-key.empty,
+.pin-key.empty:active,
+.pin-key.empty.pressed{
+  background:transparent !important;border:none !important;
+  transform:none !important;cursor:default;box-shadow:none !important;
+}
+
+.lock-footer{margin-top:32px;text-align:center}
+.lock-link{font-size:13px;color:var(--text2);cursor:pointer;
+  border-bottom:1px solid rgba(255,255,255,.15);padding-bottom:1px}
+
+/* ══════════════════════════════════════════
+   SETUP WIZARD
+══════════════════════════════════════════ */
+#setup-screen{background:transparent;overflow-y:auto}
+.wizard-step{display:none;flex-direction:column;align-items:center;
+  padding:56px 24px 40px;min-height:100dvh}
+.wizard-step.active{display:flex}
+.wizard-big-icon{font-size:56px;margin-bottom:20px;
+  animation:floatIcon 3s ease-in-out infinite}
+.wizard-title{font-size:24px;font-weight:800;text-align:center;
+  letter-spacing:-.3px;margin-bottom:10px}
+.wizard-sub{font-size:14px;color:var(--text2);text-align:center;
+  line-height:1.7;margin-bottom:40px;max-width:300px}
+.wizard-btn{
+  width:100%;max-width:320px;padding:18px;border-radius:16px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border:none;color:#fff;font-family:'Sora',sans-serif;
+  font-size:16px;font-weight:700;cursor:pointer;margin-top:auto;
+  box-shadow:0 8px 24px rgba(108,142,255,.35);
+  transition:transform .15s,box-shadow .15s;
+}
+.wizard-btn:active{transform:scale(.97);box-shadow:0 4px 12px rgba(108,142,255,.2)}
+.wizard-btn:disabled{opacity:.35;cursor:default}
+.wizard-btn-ghost{
+  width:100%;max-width:320px;padding:16px;border-radius:16px;
+  background:none;border:1px solid var(--border2);color:var(--text2);
+  font-family:'Sora',sans-serif;font-size:15px;cursor:pointer;margin-top:10px;
+}
+.phrase-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;
+  width:100%;max-width:340px;margin-bottom:28px}
+.phrase-word{background:rgba(255,255,255,.06);border:1px solid var(--border);
+  border-radius:12px;padding:10px 14px;display:flex;align-items:center;gap:10px}
+.phrase-num{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);min-width:20px}
+.phrase-w{font-size:14px;font-weight:600}
+.warn-box{background:rgba(255,179,64,.08);border:1px solid rgba(255,179,64,.25);
+  border-radius:14px;padding:14px 16px;max-width:340px;width:100%;
+  font-size:13px;color:var(--warn);line-height:1.7;margin-bottom:24px;text-align:center}
+.recovery-grid{display:flex;flex-direction:column;gap:8px;width:100%;max-width:340px;margin-bottom:24px}
+.recovery-row{display:flex;align-items:center;gap:10px}
+.recovery-num{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text3);min-width:24px;text-align:right}
+.recovery-input{flex:1;background:rgba(255,255,255,.06);border:1px solid var(--border);
+  border-radius:12px;padding:11px 14px;font-family:'Sora',sans-serif;
+  font-size:14px;color:var(--text);outline:none}
+.recovery-input:focus{border-color:var(--accent)}
+.recovery-input.ok{border-color:var(--green)}
+.recovery-input.err{border-color:var(--red)}
+
+/* ══════════════════════════════════════════
+   HOME SCREEN
+══════════════════════════════════════════ */
+#home-screen{background:transparent;padding:0}
+
+.home-header{
+  padding:52px 20px 20px;
+  display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;
+}
+.home-greeting{
+  display:flex;flex-direction:column;gap:2px;
+}
+.home-time{
+  font-family:'JetBrains Mono',monospace;font-size:11px;
+  color:var(--text2);letter-spacing:1px;
+}
+.home-title{
+  font-size:26px;font-weight:800;letter-spacing:-.5px;
+  background:linear-gradient(135deg,#fff 40%,rgba(255,255,255,.5));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.home-lock-btn{
+  width:40px;height:40px;border-radius:12px;
+  background:rgba(255,255,255,.07);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;cursor:pointer;transition:background .15s;
+  backdrop-filter:blur(10px);
+}
+.home-lock-btn:active{background:rgba(255,255,255,.14)}
+
+/* WIDGETS GRID */
+.widgets-container{
+  flex:1;overflow-y:auto;padding:0 16px 32px;
+  display:flex;flex-direction:column;gap:14px;
+}
+.widgets-container::-webkit-scrollbar{display:none}
+
+.widget-row{display:grid;gap:14px}
+.widget-row.cols-2{grid-template-columns:1fr 1fr}
+.widget-row.cols-1{grid-template-columns:1fr}
+
+/* BASE WIDGET */
+.widget{
+  border-radius:24px;padding:20px;
+  border:1px solid var(--border);
+  cursor:pointer;position:relative;overflow:hidden;
+  transition:transform .2s cubic-bezier(.34,1.56,.64,1),box-shadow .2s;
+  min-height:150px;display:flex;flex-direction:column;
+  -webkit-user-select:none;user-select:none;
+}
+.widget:active{transform:scale(.96)}
+.widget::before{
+  content:'';position:absolute;inset:0;
+  background:inherit;filter:blur(0);
+  border-radius:inherit;z-index:-1;
+}
+
+/* WIDGET VARIANTS */
+.widget-map{
+  background:linear-gradient(135deg,rgba(52,214,158,.18) 0%,rgba(52,214,158,.06) 100%);
+  box-shadow:0 8px 32px rgba(52,214,158,.1);
+  grid-column:span 2;min-height:180px;
+}
+.widget-map:active{box-shadow:0 4px 16px rgba(52,214,158,.08)}
+
+.widget-notes{
+  background:linear-gradient(135deg,rgba(108,142,255,.2) 0%,rgba(108,142,255,.07) 100%);
+  box-shadow:0 8px 32px rgba(108,142,255,.12);
+}
+.widget-chat{
+  background:linear-gradient(135deg,rgba(255,110,180,.18) 0%,rgba(255,110,180,.06) 100%);
+  box-shadow:0 8px 32px rgba(255,110,180,.1);
+}
+.widget-settings{
+  background:linear-gradient(135deg,rgba(255,179,64,.15) 0%,rgba(255,179,64,.05) 100%);
+  box-shadow:0 8px 32px rgba(255,179,64,.08);
+}
+.widget-soon{
+  background:rgba(255,255,255,.03);
+  border-style:dashed;
+  opacity:.5;cursor:default;
+}
+.widget-soon:active{transform:none}
+
+/* WIDGET CONTENT */
+.widget-icon{font-size:28px;margin-bottom:10px;line-height:1}
+.widget-name{font-size:13px;font-weight:700;letter-spacing:.3px;margin-bottom:6px;text-transform:uppercase}
+.widget-preview{font-size:12px;color:var(--text2);line-height:1.5;flex:1}
+.widget-badge{
+  position:absolute;top:16px;right:16px;
+  background:rgba(255,255,255,.12);
+  border-radius:20px;padding:3px 10px;
+  font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text2);
+}
+.widget-badge.live{background:rgba(52,214,158,.2);color:var(--green)}
+.widget-badge.soon{background:rgba(255,255,255,.05);color:var(--text3)}
+
+/* Map mini preview */
+.widget-map-preview{
+  margin-top:10px;flex:1;border-radius:14px;overflow:hidden;
+  background:rgba(0,0,0,.3);min-height:80px;position:relative;
+  display:flex;align-items:center;justify-content:center;
+}
+.widget-map-preview-text{font-size:11px;color:var(--text3)}
+#widget-map-mini{width:100%;height:100%;border-radius:14px;
+  filter:invert(1) hue-rotate(180deg) brightness(.8) saturate(.8)}
+
+/* Widget sub-items */
+.widget-subs{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.widget-sub{
+  padding:5px 10px;border-radius:20px;font-size:11px;font-weight:600;
+  background:rgba(255,255,255,.08);color:var(--text2);
+  border:1px solid rgba(255,255,255,.06);
+}
+
+/* Stats row */
+.widget-stats{display:flex;gap:12px;margin-top:10px}
+.widget-stat{flex:1;background:rgba(0,0,0,.2);border-radius:12px;padding:8px 10px;text-align:center}
+.widget-stat-val{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600}
+.widget-stat-lbl{font-size:9px;color:var(--text2);margin-top:2px;text-transform:uppercase;letter-spacing:.5px}
+
+/* ══════════════════════════════════════════
+   SECTION SCREENS
+══════════════════════════════════════════ */
+.section-screen{background:var(--bg)}
+.section-header{
+  padding:52px 16px 14px;
+  display:flex;align-items:center;gap:12px;
+  border-bottom:1px solid var(--border);flex-shrink:0;
+  background:rgba(7,7,16,.8);backdrop-filter:blur(20px);
+}
+.section-back{
+  height:38px;border-radius:12px;
+  background:rgba(108,142,255,.15);
+  border:1px solid rgba(108,142,255,.3);
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  font-size:16px;cursor:pointer;flex-shrink:0;
+  padding:0 12px;
+  transition:background .12s,transform .1s;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+  color:rgba(108,142,255,1);
+  font-family:'Sora',sans-serif;
+  font-size:13px;font-weight:600;
+}
+.section-back:active{background:rgba(108,142,255,.3);transform:scale(.93)}
+.section-title{font-size:18px;font-weight:700;flex:1;letter-spacing:-.2px}
+.section-actions{display:flex;gap:8px}
+.sec-btn{width:38px;height:38px;border-radius:12px;
+  background:rgba(255,255,255,.07);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;cursor:pointer;transition:background .15s}
+.sec-btn:active{background:rgba(255,255,255,.14)}
+
+/* ══════════════════════════════════════════
+   MAP SECTION
+══════════════════════════════════════════ */
+#map-screen{background:var(--bg)}
+#map{position:absolute;inset:0;z-index:1;
+  filter:invert(1) hue-rotate(180deg) brightness(.85) saturate(.9)}
+.leaflet-control-zoom,.leaflet-control-attribution{display:none}
+#map-ui{position:absolute;inset:0;z-index:5;pointer-events:none}
+#map-ui>*{pointer-events:all}
+
+#map-header{position:absolute;top:0;left:0;right:0;padding:52px 14px 0;
+  display:flex;align-items:flex-start;justify-content:space-between}
+.map-logo{background:rgba(7,7,16,.85);border:1px solid var(--border);border-radius:14px;
+  padding:8px 14px;display:flex;align-items:center;gap:8px;backdrop-filter:blur(20px)}
+.map-logo-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 8px var(--accent)}
+.map-logo-dot.rec{background:var(--red);box-shadow:0 0 8px var(--red);animation:pulse 1.5s infinite}
+.map-logo-text{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.5px}
+.map-actions{display:flex;gap:8px}
+.map-btn{width:42px;height:42px;background:rgba(7,7,16,.85);border:1px solid var(--border);
+  border-radius:12px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;backdrop-filter:blur(20px);transition:background .2s,transform .1s;font-size:18px}
+.map-btn:active{transform:scale(.92)}
+.map-btn.active{border-color:var(--yellow);background:rgba(245,200,66,.1)}
+
+#map-status{position:absolute;top:110px;left:50%;transform:translateX(-50%);
+  background:rgba(7,7,16,.85);border:1px solid var(--border);border-radius:30px;
+  padding:6px 16px;font-size:12px;color:var(--text2);backdrop-filter:blur(20px);
+  white-space:nowrap;transition:all .3s}
+#map-status.active{border-color:var(--green);color:var(--green)}
+#map-status.waiting{border-color:var(--warn);color:var(--warn)}
+
+#confirm-banner{position:absolute;top:150px;left:14px;right:14px;
+  background:rgba(20,20,40,.95);border:1px solid var(--accent);border-radius:20px;
+  padding:16px;display:none;flex-direction:column;gap:10px;
+  backdrop-filter:blur(20px);box-shadow:0 8px 32px rgba(108,142,255,.2);animation:slideDown .25s ease}
+#confirm-banner.show{display:flex}
+.banner-title{font-size:13px;font-weight:700}
+.banner-sub{font-size:12px;color:var(--text2)}
+.banner-input{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:12px;
+  padding:10px 14px;font-family:'Sora',sans-serif;font-size:13px;color:var(--text);
+  outline:none;resize:none;height:48px;width:100%}
+.banner-input:focus{border-color:var(--accent)}
+.banner-photo-row{display:flex;gap:8px}
+.btn-cam,.btn-gal{flex:1;padding:9px;border-radius:12px;background:rgba(255,255,255,.06);
+  border:1px solid var(--border);color:var(--text2);font-family:'Sora',sans-serif;
+  font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px}
+.photo-preview{display:none;position:relative}
+.photo-preview.show{display:block}
+.photo-preview img{width:100%;height:72px;object-fit:cover;border-radius:12px;border:1px solid var(--border)}
+.photo-remove{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;
+  background:rgba(0,0,0,.8);border:none;color:#fff;font-size:11px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center}
+.banner-actions{display:flex;gap:8px}
+.btn-yes{flex:1;padding:11px;border-radius:12px;background:var(--accent);border:none;
+  color:#fff;font-family:'Sora',sans-serif;font-size:13px;font-weight:700;cursor:pointer}
+.btn-no{flex:1;padding:11px;border-radius:12px;background:rgba(255,255,255,.07);
+  border:1px solid var(--border);color:var(--text2);font-family:'Sora',sans-serif;font-size:13px;cursor:pointer}
+
+#fav-mode-bar{position:absolute;bottom:110px;left:14px;right:14px;
+  background:rgba(255,224,102,.1);border:1px solid rgba(255,224,102,.3);border-radius:18px;
+  padding:12px 16px;display:none;align-items:center;justify-content:space-between;backdrop-filter:blur(20px)}
+#fav-mode-bar.show{display:flex}
+.fav-mode-text{font-size:13px;color:var(--yellow)}
+.fav-cancel-btn{background:none;border:1px solid rgba(255,224,102,.4);color:var(--yellow);
+  border-radius:10px;padding:5px 14px;font-family:'Sora',sans-serif;font-size:12px;cursor:pointer}
+
+#trip-stats{position:absolute;bottom:100px;left:14px;right:14px;
+  background:rgba(7,7,16,.9);border:1px solid var(--border);border-radius:18px;
+  padding:12px 16px;display:none;backdrop-filter:blur(20px)}
+#trip-stats.show{display:flex}
+.stat{flex:1;text-align:center}
+.stat-val{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:600}
+.stat-label{font-size:9px;color:var(--text2);margin-top:2px;text-transform:uppercase;letter-spacing:.8px}
+.stat-div{width:1px;background:var(--border);margin:0 8px}
+
+#main-btn-wrap{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);
+  display:flex;flex-direction:column;align-items:center;gap:6px}
+#main-btn{width:190px;height:54px;border-radius:27px;border:none;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;
+  font-family:'Sora',sans-serif;font-size:15px;font-weight:700;cursor:pointer;
+  box-shadow:0 6px 24px rgba(108,142,255,.4);
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  transition:transform .15s,background .3s}
+#main-btn:active{transform:scale(.95)}
+#main-btn.rec{background:linear-gradient(135deg,#b02020,var(--red));box-shadow:0 6px 24px rgba(255,96,96,.4)}
+#gps-acc{font-size:11px;color:var(--text2)}
+
+#locate-btn{position:absolute;bottom:24px;right:14px;
+  width:50px;height:50px;border-radius:16px;
+  background:rgba(7,7,16,.9);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;backdrop-filter:blur(20px);font-size:22px;
+  box-shadow:0 4px 16px rgba(0,0,0,.4);transition:all .2s}
+#locate-btn:active{transform:scale(.92)}
+#locate-btn.locating{border-color:var(--accent);animation:locPulse 1s infinite}
+#locate-btn.located{border-color:var(--green);background:rgba(52,214,158,.1)}
+
+.user-dot{width:16px;height:16px;border-radius:50%;background:var(--accent);
+  border:3px solid #fff;box-shadow:0 0 0 4px rgba(108,142,255,.25)}
+.gs-marker{width:12px;height:12px;border-radius:50%;background:var(--accent);
+  border:2px solid #fff;box-shadow:0 0 6px rgba(108,142,255,.6)}
+.gs-marker.first{background:var(--green)}
+.gs-marker.last{background:var(--red)}
+.gs-marker.has-photo{background:var(--yellow)}
+.fav-mw{font-size:22px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.6))}
+
+.leaflet-popup-content-wrapper{background:rgba(20,20,40,.95)!important;
+  border:1px solid var(--border)!important;border-radius:14px!important;
+  color:var(--text)!important;box-shadow:0 8px 32px rgba(0,0,0,.5)!important;
+  backdrop-filter:blur(20px)!important}
+.leaflet-popup-tip{background:rgba(20,20,40,.95)!important}
+.leaflet-popup-content{font-family:'Sora',sans-serif!important;font-size:13px!important;margin:10px 14px!important}
+.pop-title{font-weight:700;margin-bottom:4px}
+.pop-sub{font-size:11px;color:var(--text2);margin-top:2px}
+.pop-img{width:100%;border-radius:10px;margin-top:8px;max-height:100px;object-fit:cover}
+.pop-comment{font-style:italic;margin-top:4px;font-size:12px;color:var(--text2)}
+
+/* ══════════════════════════════════════════
+   MAP SUB-PANEL (trips/favs/import)
+══════════════════════════════════════════ */
+.sub-panel{position:absolute;inset:0;z-index:10;background:var(--bg);
+  display:none;flex-direction:column;animation:slideUp .3s ease}
+.sub-panel.open{display:flex}
+.sub-panel-header{padding:52px 16px 14px;display:flex;align-items:center;gap:12px;
+  border-bottom:1px solid var(--border);background:rgba(7,7,16,.9);backdrop-filter:blur(20px);flex-shrink:0}
+.sub-panel-title{font-size:18px;font-weight:700;flex:1}
+.sub-panel-close{width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.07);
+  border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--text2)}
+.sub-panel-body{flex:1;overflow-y:auto;padding:16px}
+.sub-panel-body::-webkit-scrollbar{display:none}
+.tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:0}
+.tab{flex:1;padding:11px;text-align:center;font-size:13px;font-weight:600;
+  color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* CARDS */
+.trip-card{background:rgba(255,255,255,.05);border:1px solid var(--border);
+  border-radius:16px;padding:14px 16px;margin-bottom:10px;cursor:pointer;transition:background .2s}
+.trip-card:hover{background:rgba(255,255,255,.08)}
+.trip-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.trip-name{font-size:14px;font-weight:700}
+.trip-date{font-size:11px;color:var(--text2)}
+.trip-meta{display:flex;gap:16px;flex-wrap:wrap}
+.trip-meta-item{font-size:12px;color:var(--text2)}
+.trip-meta-item span{color:var(--text);font-weight:600}
+.fav-card{background:rgba(255,255,255,.05);border:1px solid var(--border);
+  border-radius:16px;padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:12px}
+.fav-icon-big{font-size:22px;width:44px;height:44px;background:rgba(255,255,255,.06);
+  border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fav-info{flex:1;min-width:0}
+.fav-name{font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fav-coords{font-size:10px;color:var(--text2);margin-top:2px}
+.fav-note-txt{font-size:11px;color:var(--text2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fav-actions{display:flex;gap:6px}
+.fav-btn{width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,.07);
+  border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px}
+.no-items{text-align:center;color:var(--text2);font-size:14px;padding:48px 0}
+
+/* MODAL */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:80;
+  display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(8px)}
+.modal-backdrop.open{display:flex}
+.modal{background:rgba(18,18,30,.98);border:1px solid var(--border2);
+  border-radius:28px 28px 0 0;padding:24px 20px 40px;width:100%;max-width:480px;
+  animation:slideUp .3s ease;max-height:85vh;overflow-y:auto}
+.modal-title{font-size:17px;font-weight:800;margin-bottom:16px;text-align:center;letter-spacing:-.2px}
+.modal-input{background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:14px;
+  padding:13px 16px;font-family:'Sora',sans-serif;font-size:14px;color:var(--text);
+  outline:none;width:100%;margin-bottom:10px}
+.modal-input:focus{border-color:var(--accent)}
+.icon-picker{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;justify-content:center}
+.icon-opt{width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.07);
+  border:2px solid transparent;font-size:22px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:all .15s}
+.icon-opt.sel{border-color:var(--accent);background:rgba(108,142,255,.15)}
+.modal-btn{width:100%;padding:16px;border-radius:14px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;
+  color:#fff;font-family:'Sora',sans-serif;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px;
+  box-shadow:0 6px 20px rgba(108,142,255,.3)}
+.modal-btn-cancel{width:100%;padding:14px;border-radius:14px;background:none;
+  border:1px solid var(--border2);color:var(--text2);font-family:'Sora',sans-serif;font-size:14px;cursor:pointer}
+
+/* IMPORT */
+.import-drop{border:2px dashed var(--border2);border-radius:18px;padding:36px 20px;
+  text-align:center;cursor:pointer;transition:all .2s;margin-bottom:16px}
+.import-drop:hover,.import-drop.drag-over{border-color:var(--accent);background:rgba(108,142,255,.05)}
+.import-result-card{background:rgba(255,255,255,.05);border:1px solid var(--border);
+  border-radius:14px;padding:14px;margin-bottom:10px;font-size:13px}
+.badge-ok{background:rgba(52,214,158,.15);color:var(--green);font-size:10px;
+  padding:2px 8px;border-radius:20px;font-weight:700}
+.badge-skip{background:rgba(255,96,96,.15);color:var(--red);font-size:10px;
+  padding:2px 8px;border-radius:20px;font-weight:700}
+
+/* SETTINGS SECTION */
+#settings-screen{overflow-y:auto}
+.settings-body{flex:1;overflow-y:auto;padding:16px}
+.settings-body::-webkit-scrollbar{display:none}
+.s-group{margin-bottom:28px}
+.s-group-title{font-size:11px;text-transform:uppercase;letter-spacing:1.2px;
+  color:var(--text2);margin-bottom:10px;padding-left:4px}
+.s-row{background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:18px;overflow:hidden}
+.s-item{padding:15px 16px;display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border);cursor:pointer}
+.s-item:last-child{border-bottom:none}
+.s-label{font-size:14px;font-weight:500}
+.s-sub{font-size:11px;color:var(--text2);margin-top:2px}
+.toggle{width:50px;height:30px;border-radius:15px;background:rgba(255,255,255,.1);
+  border:1px solid var(--border);position:relative;cursor:pointer;transition:background .3s}
+.toggle.on{background:var(--accent);border-color:var(--accent)}
+.toggle::after{content:'';position:absolute;width:22px;height:22px;border-radius:50%;
+  background:#fff;top:3px;left:3px;transition:left .3s;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.toggle.on::after{left:25px}
+.segment{display:flex;background:rgba(255,255,255,.07);border-radius:12px;padding:3px;gap:2px}
+.seg-opt{flex:1;padding:8px 10px;border-radius:10px;text-align:center;font-size:13px;
+  cursor:pointer;transition:all .2s;color:var(--text2);user-select:none;font-weight:500}
+.seg-opt.active{background:var(--accent);color:#fff;font-weight:700}
+
+/* NOTES SECTION */
+#notes-screen{overflow:hidden}
+.notes-body{flex:1;overflow-y:auto;padding:0 12px 20px}
+.notes-body::-webkit-scrollbar{display:none}
+.notes-search-wrap{padding:10px 16px;position:relative;flex-shrink:0}
+.notes-search{width:100%;background:rgba(255,255,255,.07);border:1px solid var(--border);
+  border-radius:14px;padding:11px 14px 11px 38px;font-family:'Sora',sans-serif;
+  font-size:14px;color:var(--text);outline:none}
+.notes-search:focus{border-color:var(--accent)}
+.notes-search-icon{position:absolute;left:26px;top:50%;transform:translateY(-50%);
+  font-size:14px;color:var(--text2);pointer-events:none}
+.notes-grid{columns:2;column-gap:10px;margin-top:10px}
+.note-card{break-inside:avoid;margin-bottom:10px;border-radius:18px;
+  border:1px solid var(--border);padding:14px;cursor:pointer;
+  transition:transform .2s cubic-bezier(.34,1.56,.64,1);display:block;position:relative}
+.note-card:active{transform:scale(.96)}
+.note-card.pinned::before{content:'📌';position:absolute;top:10px;right:10px;font-size:12px}
+.note-title{font-size:14px;font-weight:700;margin-bottom:6px;letter-spacing:-.2px;
+  overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.note-preview{font-size:12px;color:var(--text2);line-height:1.5;
+  overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}
+.note-img-prev{width:100%;border-radius:10px;margin-bottom:8px;max-height:110px;object-fit:cover}
+.note-footer{display:flex;align-items:center;justify-content:space-between;margin-top:8px;gap:4px}
+.note-tags{display:flex;gap:4px;flex-wrap:wrap}
+.note-tag{font-size:10px;padding:2px 7px;border-radius:10px;
+  background:rgba(108,142,255,.15);color:var(--accent)}
+.note-date{font-size:10px;color:var(--text3)}
+#notes-fab{position:fixed;bottom:28px;right:16px;z-index:50;
+  width:54px;height:54px;border-radius:18px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border:none;color:#fff;font-size:26px;cursor:pointer;
+  box-shadow:0 6px 24px rgba(108,142,255,.4);
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .15s;pointer-events:none;opacity:0}
+#notes-fab.visible{opacity:1;pointer-events:all}
+#notes-fab:active{transform:scale(.92)}
+
+/* NOTE EDITOR */
+#note-editor{position:fixed;inset:0;z-index:90;display:none;flex-direction:column;
+  animation:slideUp .25s ease}
+#note-editor.open{display:flex}
+#editor-header{padding:52px 14px 12px;display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid var(--border);flex-shrink:0;
+  background:rgba(7,7,16,.9);backdrop-filter:blur(20px)}
+#editor-back{width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,.07);
+  border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font-size:18px;color:var(--text2)}
+#editor-title{flex:1;background:none;border:none;font-family:'Sora',sans-serif;
+  font-size:18px;font-weight:700;color:var(--text);outline:none;letter-spacing:-.2px}
+.ed-btn{width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.07);
+  border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font-size:16px;color:var(--text2);transition:background .15s}
+.ed-btn:active{background:rgba(255,255,255,.14)}
+.ed-btn.on{background:rgba(108,142,255,.2);color:var(--accent)}
+#color-bar{display:none;padding:10px 16px;gap:8px;overflow-x:auto;
+  border-bottom:1px solid var(--border);flex-shrink:0}
+#color-bar.show{display:flex}
+.cswatch{width:30px;height:30px;border-radius:50%;cursor:pointer;flex-shrink:0;
+  border:3px solid transparent;transition:transform .15s}
+.cswatch:active{transform:scale(.85)}
+.cswatch.sel{border-color:#fff}
+#tag-bar{display:none;padding:8px 16px;gap:6px;align-items:center;
+  border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+#tag-bar.show{display:flex}
+.ed-tag{font-size:11px;padding:4px 10px;border-radius:20px;
+  background:rgba(108,142,255,.15);color:var(--accent);cursor:pointer;
+  display:flex;align-items:center;gap:5px}
+.ed-tag-x{font-size:14px;line-height:1}
+#tag-inp{background:none;border:none;font-family:'Sora',sans-serif;
+  font-size:13px;color:var(--text);outline:none;min-width:100px}
+#tag-inp::placeholder{color:var(--text2)}
+#editor-body{flex:1;overflow-y:auto;padding:16px}
+#editor-body::-webkit-scrollbar{display:none}
+#note-text{min-height:200px;background:none;border:none;
+  font-family:'Sora',sans-serif;font-size:15px;color:var(--text);
+  outline:none;resize:none;width:100%;line-height:1.8}
+#note-text::placeholder{color:var(--text3)}
+.note-block{margin-bottom:14px}
+.img-wrap{position:relative;display:block;width:100%}
+.img-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%;
+  border-radius:14px;cursor:crosshair}
+.img-wrap img{width:100%;border-radius:14px;display:block}
+.img-toolbar{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.img-tool{padding:6px 12px;border-radius:20px;background:rgba(255,255,255,.07);
+  border:1px solid var(--border);font-size:11px;color:var(--text2);cursor:pointer;
+  font-family:'Sora',sans-serif;transition:all .15s}
+.img-tool:active{background:rgba(255,255,255,.12)}
+.img-tool.on{background:rgba(108,142,255,.2);border-color:var(--accent);color:var(--accent)}
+.cc-row{display:flex;gap:5px;align-items:center;padding:4px 0}
+.cc{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid transparent}
+.cc:active{transform:scale(.8)}
+.cc.sel{border-color:#fff}
+.checklist-wrap{background:rgba(255,255,255,.05);border:1px solid var(--border);
+  border-radius:16px;padding:12px}
+.check-item{display:flex;align-items:center;gap:10px;padding:7px 0;
+  border-bottom:1px solid rgba(255,255,255,.05)}
+.check-item:last-child{border-bottom:none}
+.check-box{width:22px;height:22px;border-radius:7px;border:2px solid var(--border);
+  cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.check-box.on{background:var(--accent);border-color:var(--accent)}
+.check-box.on::after{content:'✓';font-size:13px;color:#fff;font-weight:700}
+.check-text{flex:1;background:none;border:none;font-family:'Sora',sans-serif;
+  font-size:14px;color:var(--text);outline:none}
+.check-text.done{text-decoration:line-through;color:var(--text3)}
+.check-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:0 4px}
+.add-check{width:100%;padding:9px;background:none;border:1px dashed var(--border);
+  border-radius:12px;color:var(--text2);font-family:'Sora',sans-serif;font-size:13px;
+  cursor:pointer;margin-top:8px;transition:border-color .15s}
+.add-check:hover{border-color:var(--accent)}
+#editor-fab-row{padding:10px 14px;display:flex;gap:8px;border-top:1px solid var(--border);
+  flex-shrink:0;overflow-x:auto;background:rgba(7,7,16,.9);backdrop-filter:blur(20px)}
+#editor-fab-row::-webkit-scrollbar{display:none}
+.efab{padding:9px 16px;border-radius:20px;background:rgba(255,255,255,.07);
+  border:1px solid var(--border);font-size:12px;color:var(--text2);cursor:pointer;
+  white-space:nowrap;font-family:'Sora',sans-serif;
+  display:flex;align-items:center;gap:5px;flex-shrink:0}
+.efab:active{background:rgba(255,255,255,.12)}
+
+/* CHAT SECTION */
+#chat-screen{overflow:hidden}
+.chat-body{flex:1;overflow-y:auto;padding:16px}
+.chat-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;gap:16px;color:var(--text2);text-align:center;padding:40px}
+.chat-placeholder-icon{font-size:48px;opacity:.4}
+.chat-placeholder-title{font-size:18px;font-weight:700;color:var(--text);opacity:.6}
+.chat-placeholder-sub{font-size:13px;line-height:1.6;opacity:.6}
+.coming-soon-badge{background:rgba(255,110,180,.15);border:1px solid rgba(255,110,180,.3);
+  color:var(--pink);font-size:12px;font-weight:700;padding:6px 16px;border-radius:20px;
+  letter-spacing:.5px}
+
+/* NOTE COLORS */
+.nc-default{background:rgba(255,255,255,.05)}
+.nc-red{background:rgba(192,57,43,.15);border-color:rgba(192,57,43,.3)!important}
+.nc-orange{background:rgba(230,126,34,.13);border-color:rgba(230,126,34,.3)!important}
+.nc-yellow{background:rgba(241,196,15,.1);border-color:rgba(241,196,15,.25)!important}
+.nc-green{background:rgba(39,174,96,.12);border-color:rgba(39,174,96,.25)!important}
+.nc-blue{background:rgba(41,128,185,.14);border-color:rgba(41,128,185,.3)!important}
+.nc-purple{background:rgba(142,68,173,.14);border-color:rgba(142,68,173,.3)!important}
+.nc-pink{background:rgba(233,30,140,.12);border-color:rgba(233,30,140,.25)!important}
+
+/* ANIMATIONS */
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes slideDown{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideUp{from{transform:translateY(24px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+@keyframes locPulse{0%,100%{box-shadow:0 0 0 0 rgba(108,142,255,.4)}50%{box-shadow:0 0 0 8px rgba(108,142,255,0)}}
+@keyframes staggerIn{from{opacity:0;transform:translateY(20px) scale(.95)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+
+</head>
+<body>
+
+<div id="bg-mesh"></div>
+
+<!-- ══════════════════════════════════
+     LOCK SCREEN
+══════════════════════════════════ -->
+<div class="screen active" id="lock-screen">
+  <div class="lock-brand">
+    <div class="lock-brand-icon">🌱</div>
+    <div class="lock-brand-name">My Life</div>
+    <div class="lock-brand-sub" id="lock-sub">La tua privacy, sulla chain, per sempre</div>
+  </div>
+  <div class="pin-dots" id="pin-dots">
+    <div class="pin-dot" id="d0"></div><div class="pin-dot" id="d1"></div>
+    <div class="pin-dot" id="d2"></div><div class="pin-dot" id="d3"></div>
+    <div class="pin-dot" id="d4"></div><div class="pin-dot" id="d5"></div>
+  </div>
+  <div class="pin-pad">
+    <div class="pin-key" data-fn="pinKey" data-val="1">1</div>
+    <div class="pin-key" data-fn="pinKey" data-val="2">2<div class="pin-key-sub">ABC</div></div>
+    <div class="pin-key" data-fn="pinKey" data-val="3">3<div class="pin-key-sub">DEF</div></div>
+    <div class="pin-key" data-fn="pinKey" data-val="4">4<div class="pin-key-sub">GHI</div></div>
+    <div class="pin-key" data-fn="pinKey" data-val="5">5<div class="pin-key-sub">JKL</div></div>
+    <div class="pin-key" data-fn="pinKey" data-val="6">6<div class="pin-key-sub">MNO</div></div>
+    <div class="pin-key" data-fn="pinKey" data-val="7">7<div class="pin-key-sub">PQRS</div></div>
+    <div class="pin-key" data-fn="pinKey" data-val="8">8<div class="pin-key-sub">TUV</div></div>
+    <div class="pin-key" data-fn="pinKey" data-val="9">9<div class="pin-key-sub">WXYZ</div></div>
+    <div class="pin-key empty"></div>
+    <div class="pin-key" data-fn="pinKey" data-val="0">0</div>
+    <div class="pin-key" data-fn="pinDel">⌫</div>
+  </div>
+  <div class="lock-footer">
+    <span class="lock-link" onclick="showRecovery()">Hai dimenticato il PIN?</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     SETUP WIZARD
+══════════════════════════════════ -->
+<div class="screen slide-up" id="setup-screen">
+  <div class="wizard-step active" id="step-welcome">
+    <div style="height:40px"></div>
+    <div class="wizard-big-icon">🌱</div>
+    <div class="wizard-title">Benvenuto in My Life</div>
+    <div class="wizard-sub">La tua vita, tua. Tutto cifrato sul tuo device — nessun server, nessuna azienda.</div>
+    <div style="flex:1"></div>
+    <button class="wizard-btn" onclick="goStep('step-pin')">Crea il tuo PIN</button>
+  </div>
+  <div class="wizard-step" id="step-pin">
+    <div style="height:30px"></div>
+    <div class="wizard-big-icon">🔢</div>
+    <div class="wizard-title">Scegli un PIN</div>
+    <div class="wizard-sub">6 cifre. Deriva la tua chiave di cifratura — non lo memorizziamo.</div>
+    <div class="pin-dots" id="setup-dots">
+      <div class="pin-dot" id="sd0"></div><div class="pin-dot" id="sd1"></div>
+      <div class="pin-dot" id="sd2"></div><div class="pin-dot" id="sd3"></div>
+      <div class="pin-dot" id="sd4"></div><div class="pin-dot" id="sd5"></div>
+    </div>
+    <div class="pin-pad">
+      <div class="pin-key" data-fn="setupKey" data-val="1">1</div><div class="pin-key" data-fn="setupKey" data-val="2">2</div>
+      <div class="pin-key" data-fn="setupKey" data-val="3">3</div><div class="pin-key" data-fn="setupKey" data-val="4">4</div>
+      <div class="pin-key" data-fn="setupKey" data-val="5">5</div><div class="pin-key" data-fn="setupKey" data-val="6">6</div>
+      <div class="pin-key" data-fn="setupKey" data-val="7">7</div><div class="pin-key" data-fn="setupKey" data-val="8">8</div>
+      <div class="pin-key" data-fn="setupKey" data-val="9">9</div>
+      <div class="pin-key empty"></div><div class="pin-key" data-fn="setupKey" data-val="0">0</div>
+      <div class="pin-key" data-fn="setupDel">⌫</div>
+    </div>
+  </div>
+  <div class="wizard-step" id="step-confirm">
+    <div style="height:30px"></div>
+    <div class="wizard-big-icon">✅</div>
+    <div class="wizard-title">Conferma il PIN</div>
+    <div class="wizard-sub">Inseriscilo di nuovo per confermare.</div>
+    <div class="pin-dots" id="confirm-dots">
+      <div class="pin-dot" id="cd0"></div><div class="pin-dot" id="cd1"></div>
+      <div class="pin-dot" id="cd2"></div><div class="pin-dot" id="cd3"></div>
+      <div class="pin-dot" id="cd4"></div><div class="pin-dot" id="cd5"></div>
+    </div>
+    <div class="pin-pad">
+      <div class="pin-key" data-fn="confirmKey" data-val="1">1</div><div class="pin-key" data-fn="confirmKey" data-val="2">2</div>
+      <div class="pin-key" data-fn="confirmKey" data-val="3">3</div><div class="pin-key" data-fn="confirmKey" data-val="4">4</div>
+      <div class="pin-key" data-fn="confirmKey" data-val="5">5</div><div class="pin-key" data-fn="confirmKey" data-val="6">6</div>
+      <div class="pin-key" data-fn="confirmKey" data-val="7">7</div><div class="pin-key" data-fn="confirmKey" data-val="8">8</div>
+      <div class="pin-key" data-fn="confirmKey" data-val="9">9</div>
+      <div class="pin-key empty"></div><div class="pin-key" data-fn="confirmKey" data-val="0">0</div>
+      <div class="pin-key" data-fn="confirmDel">⌫</div>
+    </div>
+  </div>
+  <div class="wizard-step" id="step-phrase">
+    <div style="height:20px"></div>
+    <div class="wizard-big-icon">📝</div>
+    <div class="wizard-title">Frase di recupero</div>
+    <div class="warn-box">⚠️ Scrivi queste 12 parole su carta. Sono l'unico modo per recuperare i tuoi dati se dimentichi il PIN.</div>
+    <div class="phrase-grid" id="phrase-grid"></div>
+    <button class="wizard-btn" onclick="goStep('step-verify')">Ho scritto le parole</button>
+  </div>
+  <div class="wizard-step" id="step-verify">
+    <div style="height:20px"></div>
+    <div class="wizard-big-icon">🧠</div>
+    <div class="wizard-title">Verifica</div>
+    <div class="wizard-sub">Inserisci le parole richieste per confermare che le hai salvate.</div>
+    <div class="recovery-grid" id="verify-grid"></div>
+    <button class="wizard-btn" id="verify-btn" onclick="finishSetup()" disabled>Inizia →</button>
+    <button class="wizard-btn-ghost" onclick="goStep('step-phrase')">← Torna alle parole</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     RECOVERY SCREEN
+══════════════════════════════════ -->
+<div class="screen slide-up" id="recovery-screen" style="overflow-y:auto;align-items:center;padding:48px 24px">
+  <div style="width:100%;max-width:340px">
+    <button onclick="navTo('lock-screen')" style="background:none;border:none;color:var(--text2);font-size:14px;cursor:pointer;margin-bottom:28px;font-family:'Sora',sans-serif">← Torna</button>
+    <div style="font-size:44px;margin-bottom:16px">🔑</div>
+    <div style="font-size:22px;font-weight:800;margin-bottom:8px;letter-spacing:-.3px">Recupero accesso</div>
+    <div style="font-size:14px;color:var(--text2);margin-bottom:24px;line-height:1.6">Inserisci le 12 parole nella sequenza corretta.</div>
+    <div class="recovery-grid" id="recovery-grid"></div>
+    <button class="wizard-btn" onclick="doRecovery()">Recupera accesso</button>
+    <div id="rec-err" style="color:var(--red);font-size:12px;text-align:center;margin-top:10px"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     HOME SCREEN (Widget Grid)
+══════════════════════════════════ -->
+<div class="screen slide-up" id="home-screen">
+  <div class="home-header">
+    <div class="home-greeting">
+      <div class="home-time" id="home-time">—</div>
+      <div class="home-title">My Life</div>
+    </div>
+    <div class="home-lock-btn" onclick="lockApp()">🔒</div>
+  </div>
+  <div class="widgets-container">
+
+    <!-- ROW 1: MAP (full width) -->
+    <div class="widget-row cols-1">
+      <div class="widget widget-map" onclick="openSection('map-screen')" style="animation:staggerIn .4s ease both .1s">
+        <div class="widget-badge live" id="w-map-badge">● LIVE</div>
+        <div class="widget-icon">🗺</div>
+        <div class="widget-name">Mappa</div>
+        <div class="widget-preview" id="w-map-preview">Inizia un viaggio · Localizzami · Preferiti · Import Google</div>
+        <div class="widget-map-preview" id="widget-map-preview-wrap">
+          <div id="widget-map-mini"></div>
+          <div class="widget-map-preview-text" id="w-map-mini-text" style="position:absolute">Apri per vedere la mappa</div>
+        </div>
+        <div class="widget-subs">
+          <span class="widget-sub">📍 Localizzami</span>
+          <span class="widget-sub">⭐ Preferiti</span>
+          <span class="widget-sub">📥 Import</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROW 2: NOTES + CHAT -->
+    <div class="widget-row cols-2">
+      <div class="widget widget-notes" onclick="openSection('notes-screen')" style="animation:staggerIn .4s ease both .2s">
+        <div class="widget-badge" id="w-notes-badge">0 note</div>
+        <div class="widget-icon">📓</div>
+        <div class="widget-name">Note</div>
+        <div class="widget-preview" id="w-notes-preview">Scrivi, organizza con tag e colori</div>
+        <div class="widget-subs">
+          <span class="widget-sub">🏷 Tag</span>
+          <span class="widget-sub">☑ Liste</span>
+        </div>
+      </div>
+      <div class="widget widget-chat" onclick="openSection('chat-screen')" style="animation:staggerIn .4s ease both .3s">
+        <div class="widget-badge soon">presto</div>
+        <div class="widget-icon">💬</div>
+        <div class="widget-name">Chat</div>
+        <div class="widget-preview">P2P · Gruppi · Pagamenti MetaMask</div>
+        <div class="widget-subs">
+          <span class="widget-sub">👥 Gruppi</span>
+          <span class="widget-sub">💸 Pay</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROW 3: SETTINGS + FUTURE -->
+    <div class="widget-row cols-2">
+      <div class="widget widget-settings" onclick="openSection('settings-screen')" style="animation:staggerIn .4s ease both .4s">
+        <div class="widget-icon">⚙️</div>
+        <div class="widget-name">Impostazioni</div>
+        <div class="widget-preview" id="w-settings-preview">GPS · Lingua · Sicurezza · Dati</div>
+      </div>
+      <div class="widget widget-soon" style="animation:staggerIn .4s ease both .5s">
+        <div class="widget-badge soon">M3</div>
+        <div class="widget-icon" style="opacity:.3">⛓</div>
+        <div class="widget-name" style="color:var(--text3)">Blockchain</div>
+        <div class="widget-preview" style="color:var(--text3)">Smart contract · IPFS · Identity</div>
+      </div>
+    </div>
+
+    <!-- VERSION -->
+    <div style="text-align:center;padding:8px 0">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3)">My Life v2.1 · AES-256-GCM · M1+M2</span>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     MAP SECTION
+══════════════════════════════════ -->
+<div class="screen slide-up" id="map-screen">
+  <div id="map"></div>
+  <div id="map-ui">
+    <div id="map-header">
+      <div class="map-logo">
+        <div class="map-logo-dot" id="logo-dot"></div>
+        <span class="map-logo-text">Mappa</span>
+      </div>
+      <div class="map-actions">
+        <div class="map-btn" onclick="openSubPanel('trips-panel');renderTrips()">📋</div>
+        <div class="map-btn" id="fav-toggle-btn" onclick="toggleFavMode()">⭐</div>
+        <div class="map-btn" onclick="openSubPanel('import-panel')">📥</div>
+        <div class="map-btn" onclick="closeSection()">🏠</div>
+      </div>
+    </div>
+    <div id="map-status">Pronto</div>
+    <div id="confirm-banner">
+      <div><div class="banner-title" id="banner-title"></div><div class="banner-sub" id="banner-sub"></div></div>
+      <textarea class="banner-input" id="point-comment" placeholder="Nota opzionale..."></textarea>
+      <div class="banner-photo-row">
+        <button class="btn-cam" onclick="triggerPhoto('camera')">📷 Scatta</button>
+        <button class="btn-gal" onclick="triggerPhoto('gallery')">🖼 Galleria</button>
+      </div>
+      <div class="photo-preview" id="photo-preview">
+        <img id="preview-img" src="" alt="">
+        <button class="photo-remove" onclick="removePhoto()">✕</button>
+      </div>
+      <div class="banner-actions">
+        <button class="btn-yes" onclick="confirmPoint()">✓ Sì, salva</button>
+        <button class="btn-no" onclick="dismissBanner()">Ignora</button>
+      </div>
+    </div>
+    <div id="fav-mode-bar">
+      <span class="fav-mode-text">⭐ Tocca la mappa per salvare un luogo</span>
+      <button class="fav-cancel-btn" onclick="cancelFavMode()">Annulla</button>
+    </div>
+    <div id="trip-stats">
+      <div class="stat"><div class="stat-val" id="stat-points">0</div><div class="stat-label">Punti</div></div>
+      <div class="stat-div"></div>
+      <div class="stat"><div class="stat-val" id="stat-dist">0 m</div><div class="stat-label">Distanza</div></div>
+      <div class="stat-div"></div>
+      <div class="stat"><div class="stat-val" id="stat-time">00:00</div><div class="stat-label">Durata</div></div>
+    </div>
+    <div id="main-btn-wrap">
+      <div id="gps-acc"></div>
+      <button id="main-btn" onclick="toggleTracking()">
+        <span id="btn-icon">▶</span><span id="btn-label">Inizia viaggio</span>
+      </button>
+    </div>
+    <div id="locate-btn" onclick="locateMe()">📍</div>
+  </div>
+
+  <!-- Sub-panels within map -->
+  <div class="sub-panel" id="trips-panel">
+    <div class="sub-panel-header">
+      <div class="sub-panel-title">Esplora</div>
+      <button class="sub-panel-close" onclick="closeSubPanel('trips-panel')">✕</button>
+    </div>
+    <div class="tabs">
+      <div class="tab active" id="ptab-trips" onclick="switchPTab('trips')">🗺 Viaggi</div>
+      <div class="tab" id="ptab-favs" onclick="switchPTab('favs')">⭐ Preferiti</div>
+    </div>
+    <div class="sub-panel-body" id="trips-body"></div>
+  </div>
+
+  <div class="sub-panel" id="import-panel">
+    <div class="sub-panel-header">
+      <div class="sub-panel-title">📥 Import Google Maps</div>
+      <button class="sub-panel-close" onclick="closeSubPanel('import-panel')">✕</button>
+    </div>
+    <div class="sub-panel-body">
+      <div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:16px">
+        Importa da <b style="color:var(--text)">Google Takeout</b> — <span style="color:var(--accent)">takeout.google.com</span> → Maps → ZIP.<br><br>
+        File supportati: <b style="color:var(--text)">Luoghi_salvati.json</b> · <b style="color:var(--text)">Luoghi_etichettati.json</b>
+      </div>
+      <div class="import-drop" id="drop-zone"
+        onclick="document.getElementById('input-import').click()"
+        ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <div style="font-size:32px;margin-bottom:8px">📂</div>
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px">Tocca per scegliere i file</div>
+        <div style="font-size:12px;color:var(--text2)">Puoi trascinare più file insieme</div>
+      </div>
+      <div id="import-results"></div>
+      <div id="import-confirm-wrap" style="display:none">
+        <button class="modal-btn" id="import-confirm-btn" onclick="confirmImport()">Importa</button>
+        <button class="modal-btn-cancel" onclick="cancelImport()">Annulla</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FAV MODAL -->
+<div class="modal-backdrop" id="fav-modal">
+  <div class="modal">
+    <div class="modal-title">⭐ Nuovo luogo preferito</div>
+    <div class="icon-picker" id="icon-picker">
+      <div class="icon-opt sel" data-icon="📍" onclick="selectIcon(this)">📍</div>
+      <div class="icon-opt" data-icon="🏠" onclick="selectIcon(this)">🏠</div>
+      <div class="icon-opt" data-icon="🏢" onclick="selectIcon(this)">🏢</div>
+      <div class="icon-opt" data-icon="🍕" onclick="selectIcon(this)">🍕</div>
+      <div class="icon-opt" data-icon="☕" onclick="selectIcon(this)">☕</div>
+      <div class="icon-opt" data-icon="🏖" onclick="selectIcon(this)">🏖</div>
+      <div class="icon-opt" data-icon="🏔" onclick="selectIcon(this)">🏔</div>
+      <div class="icon-opt" data-icon="❤️" onclick="selectIcon(this)">❤️</div>
+    </div>
+    <input class="modal-input" id="fav-name" placeholder="Nome del luogo...">
+    <input class="modal-input" id="fav-note" placeholder="Nota (opzionale)...">
+    <button class="modal-btn" onclick="saveFavorite()">Salva</button>
+    <button class="modal-btn-cancel" onclick="closeFavModal()">Annulla</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     NOTES SECTION
+══════════════════════════════════ -->
+<div class="screen slide-up" id="notes-screen">
+  <div class="section-header">
+    <button class="section-back" onclick="closeSection()" title="Torna alla home">🏠 Home</button>
+    <div class="section-title">📓 Note</div>
+  </div>
+  <div class="notes-search-wrap">
+    <span class="notes-search-icon">🔍</span>
+    <input class="notes-search" id="notes-search" placeholder="Cerca..." oninput="renderNotes()">
+  </div>
+  <div style="padding:0 12px 8px;display:flex;gap:6px;overflow-x:auto;flex-shrink:0" id="tag-filter-bar"></div>
+  <div class="notes-body"><div class="notes-grid" id="notes-grid"></div></div>
+</div>
+<button id="notes-fab" onclick="openEditor(null)">＋</button>
+
+<!-- NOTE EDITOR -->
+<div id="note-editor">
+  <div id="editor-header">
+    <button id="editor-back" onclick="closeEditor()">←</button>
+    <input id="editor-title" placeholder="Titolo...">
+    <div style="display:flex;gap:6px">
+      <button class="ed-btn" id="btn-pin" onclick="togglePin()" title="Fissa">📌</button>
+      <button class="ed-btn" id="btn-color" onclick="toggleColorBar()">🎨</button>
+      <button class="ed-btn" id="btn-tag" onclick="toggleTagBar()">🏷</button>
+      <button class="ed-btn" onclick="deleteNote()" style="color:var(--red)">🗑</button>
+    </div>
+  </div>
+  <div id="color-bar">
+    <div class="cswatch sel" data-c="default" style="background:rgba(255,255,255,.15)" onclick="setColor('default',this)"></div>
+    <div class="cswatch" data-c="red" style="background:#c0392b" onclick="setColor('red',this)"></div>
+    <div class="cswatch" data-c="orange" style="background:#e67e22" onclick="setColor('orange',this)"></div>
+    <div class="cswatch" data-c="yellow" style="background:#f1c40f" onclick="setColor('yellow',this)"></div>
+    <div class="cswatch" data-c="green" style="background:#27ae60" onclick="setColor('green',this)"></div>
+    <div class="cswatch" data-c="blue" style="background:#2980b9" onclick="setColor('blue',this)"></div>
+    <div class="cswatch" data-c="purple" style="background:#8e44ad" onclick="setColor('purple',this)"></div>
+    <div class="cswatch" data-c="pink" style="background:#e91e8c" onclick="setColor('pink',this)"></div>
+  </div>
+  <div id="tag-bar">
+    <div id="current-tags"></div>
+    <input id="tag-inp" placeholder="Aggiungi tag..." onkeydown="onTagKey(event)">
+  </div>
+  <div id="editor-body">
+    <div id="note-blocks"></div>
+    <textarea id="note-text" placeholder="Inizia a scrivere..."></textarea>
+  </div>
+  <div id="editor-fab-row">
+    <button class="efab" onclick="addImgBlock()">📷 Immagine</button>
+    <button class="efab" onclick="addCheckBlock()">☑ Checklist</button>
+    <button class="efab" onclick="addDivider()">— Separatore</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     CHAT SECTION
+══════════════════════════════════ -->
+<div class="screen slide-up" id="chat-screen">
+  <div class="section-header">
+    <button class="section-back" onclick="closeSection()" title="Torna alla home">🏠 Home</button>
+    <div class="section-title">💬 Chat</div>
+    <div class="section-actions">
+      <div class="sec-btn">👥</div>
+    </div>
+  </div>
+  <div class="chat-body">
+    <div class="chat-placeholder">
+      <div class="chat-placeholder-icon">💬</div>
+      <div class="chat-placeholder-title">Chat P2P</div>
+      <div class="chat-placeholder-sub">Messaggi cifrati end-to-end · Gruppi privati · Pagamenti MetaMask<br><br>In arrivo con M1.3</div>
+      <div class="coming-soon-badge">M1.3 — In sviluppo</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     SETTINGS SECTION
+══════════════════════════════════ -->
+<div class="screen slide-up" id="settings-screen">
+  <div class="section-header">
+    <button class="section-back" onclick="closeSection()" title="Torna alla home">🏠 Home</button>
+    <div class="section-title">⚙️ Impostazioni</div>
+  </div>
+  <div class="settings-body">
+    <div class="s-group">
+      <div class="s-group-title">GPS</div>
+      <div class="s-row">
+        <div class="s-item" onclick="toggleAuto()">
+          <div><div class="s-label">Registrazione automatica</div><div class="s-sub">Senza chiedere conferma</div></div>
+          <div class="toggle" id="toggle-auto"></div>
+        </div>
+        <div class="s-item" style="cursor:default">
+          <div class="segment" id="seg-sens">
+            <div class="seg-opt" data-val="low" onclick="setSens('low')">Bassa</div>
+            <div class="seg-opt active" data-val="medium" onclick="setSens('medium')">Media</div>
+            <div class="seg-opt" data-val="high" onclick="setSens('high')">Alta</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="s-group">
+      <div class="s-group-title">Lingua</div>
+      <div class="s-row">
+        <div class="s-item" style="cursor:default">
+          <div class="segment">
+            <div class="seg-opt active" id="seg-it" onclick="setLang('it')">Italiano</div>
+            <div class="seg-opt" id="seg-en" onclick="setLang('en')">English</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="s-group">
+      <div class="s-group-title">Sicurezza</div>
+      <div class="s-row">
+        <div class="s-item" onclick="lockApp()">
+          <div class="s-label">Blocca app</div><span style="color:var(--accent)">🔒</span>
+        </div>
+      </div>
+    </div>
+    <div class="s-group">
+      <div class="s-group-title">Dati</div>
+      <div class="s-row">
+        <div class="s-item" onclick="exportData()">
+          <div class="s-label">Esporta tutto (JSON)</div><span style="color:var(--accent)">↓</span>
+        </div>
+        <div class="s-item" onclick="clearData()">
+          <div class="s-label" style="color:var(--red)">Cancella tutti i dati</div><span style="color:var(--red)">✕</span>
+        </div>
+      </div>
+    </div>
+    <div style="text-align:center;padding:20px 0 8px">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3)">My Life v2.1.0 · AES-256-GCM</span>
+    </div>
+  </div>
+</div>
+
+<!-- FILE INPUTS -->
+<input type="file" id="input-camera" accept="image/*" capture="environment" style="display:none" onchange="onMapPhoto(this)">
+<input type="file" id="input-gallery" accept="image/*" style="display:none" onchange="onMapPhoto(this)">
+<input type="file" id="input-import" accept=".json" multiple style="display:none" onchange="onImportFile(this)">
+<input type="file" id="input-note-img" accept="image/*" style="display:none" onchange="onNoteImg(this)">
+
+<script>
+
+<!-- ═══════════════════════════════════════════
+     My Life — Moduli JS
+     Ordine di caricamento importante:
+     1. crypto.js  — cifratura (no dipendenze)
+     2. db.js      — database (dipende da crypto)
+     3. app.js     — core, nav, stato (dipende da db)
+     4. map.js     — mappa GPS (dipende da app+db)
+     5. notes.js   — note (dipende da app+db)
+     6. chat.js    — chat placeholder (M1.3)
+     7. settings.js — impostazioni (dipende da db)
+══════════════════════════════════════════════ -->
+<script src="crypto.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+<script src="map.js"></script>
+<script src="notes.js"></script>
+<script src="chat.js"></script>
+<script src="settings.js"></script>
+
+</body>
+</html>
