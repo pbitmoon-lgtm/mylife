@@ -286,13 +286,20 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);
   background:rgba(7,7,16,.8);backdrop-filter:blur(20px);
 }
 .section-back{
-  width:38px;height:38px;border-radius:12px;
-  background:rgba(255,255,255,.07);border:1px solid var(--border);
-  display:flex;align-items:center;justify-content:center;
-  font-size:18px;cursor:pointer;flex-shrink:0;
-  transition:background .15s;
+  height:38px;border-radius:12px;
+  background:rgba(108,142,255,.15);
+  border:1px solid rgba(108,142,255,.3);
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  font-size:16px;cursor:pointer;flex-shrink:0;
+  padding:0 12px;
+  transition:background .12s,transform .1s;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+  color:rgba(108,142,255,1);
+  font-family:'Sora',sans-serif;
+  font-size:13px;font-weight:600;
 }
-.section-back:active{background:rgba(255,255,255,.14)}
+.section-back:active{background:rgba(108,142,255,.3);transform:scale(.93)}
 .section-title{font-size:18px;font-weight:700;flex:1;letter-spacing:-.2px}
 .section-actions{display:flex;gap:8px}
 .sec-btn{width:38px;height:38px;border-radius:12px;
@@ -990,7 +997,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);
 ══════════════════════════════════ -->
 <div class="screen slide-up" id="notes-screen">
   <div class="section-header">
-    <button class="section-back" onclick="closeSection()">←</button>
+    <button class="section-back" onclick="closeSection()" title="Torna alla home">🏠 Home</button>
     <div class="section-title">📓 Note</div>
   </div>
   <div class="notes-search-wrap">
@@ -1044,7 +1051,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);
 ══════════════════════════════════ -->
 <div class="screen slide-up" id="chat-screen">
   <div class="section-header">
-    <button class="section-back" onclick="closeSection()">←</button>
+    <button class="section-back" onclick="closeSection()" title="Torna alla home">🏠 Home</button>
     <div class="section-title">💬 Chat</div>
     <div class="section-actions">
       <div class="sec-btn">👥</div>
@@ -1065,7 +1072,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);
 ══════════════════════════════════ -->
 <div class="screen slide-up" id="settings-screen">
   <div class="section-header">
-    <button class="section-back" onclick="closeSection()">←</button>
+    <button class="section-back" onclick="closeSection()" title="Torna alla home">🏠 Home</button>
     <div class="section-title">⚙️ Impostazioni</div>
   </div>
   <div class="settings-body">
@@ -1321,21 +1328,22 @@ const S={
 const SENS={low:{d:200},medium:{d:80},high:{d:25}};
 
 // ═══════════════════════════════════════════════
-// NAV
+// NAV — History API per gesto indietro del telefono
 // ═══════════════════════════════════════════════
-let currentScreen='lock-screen';
+let currentScreen = 'lock-screen';
+const LOCKED_SCREENS = new Set(['lock-screen','setup-screen','recovery-screen']);
 
-function navTo(id){
+function navTo(id) {
   document.querySelector('.screen.active')?.classList.remove('active');
-  const el=document.getElementById(id);
-  el.classList.add('active');
-  currentScreen=id;
+  document.getElementById(id).classList.add('active');
+  currentScreen = id;
 }
 
-function openSection(id){
+function openSection(id) {
+  history.pushState({ screen: id }, '');
   navTo(id);
-  if(id==='map-screen'&&!S.map)initMap();
-  if(id==='notes-screen'){
+  if (id === 'map-screen' && !S.map) initMap();
+  if (id === 'notes-screen') {
     document.getElementById('notes-fab').classList.add('visible');
     renderNotes();
   } else {
@@ -1344,14 +1352,52 @@ function openSection(id){
   updateHomeWidgets();
 }
 
-function closeSection(){
+function closeSection() {
+  if (history.state?.screen) history.back();
+  else _goHome();
+}
+
+function _goHome() {
   navTo('home-screen');
   document.getElementById('notes-fab').classList.remove('visible');
+  document.querySelectorAll('.sub-panel.open').forEach(p => p.classList.remove('open'));
+  document.getElementById('note-editor').classList.remove('open');
   updateHomeWidgets();
 }
 
-function openSubPanel(id){document.getElementById(id).classList.add('open')}
-function closeSubPanel(id){document.getElementById(id).classList.remove('open')}
+// Intercetta il gesto indietro del telefono
+window.addEventListener('popstate', e => {
+  if (LOCKED_SCREENS.has(currentScreen)) return;
+
+  // Note editor aperto → chiudi editor prima
+  if (document.getElementById('note-editor').classList.contains('open')) {
+    document.getElementById('note-editor').classList.remove('open');
+    document.getElementById('notes-fab').classList.add('visible');
+    loadNotes().then(renderNotes);
+    history.pushState({ screen: 'notes-screen' }, '');
+    return;
+  }
+
+  // Sub-panel aperto → chiudi sub-panel prima
+  const openPanel = document.querySelector('.sub-panel.open');
+  if (openPanel) {
+    openPanel.classList.remove('open');
+    history.pushState({ screen: currentScreen }, '');
+    return;
+  }
+
+  // Altrimenti torna alla home
+  _goHome();
+});
+
+function openSubPanel(id) {
+  history.pushState({ screen: currentScreen, panel: id }, '');
+  document.getElementById(id).classList.add('open');
+}
+function closeSubPanel(id) {
+  document.getElementById(id).classList.remove('open');
+  if (history.state?.panel) history.back();
+}
 
 // ═══════════════════════════════════════════════
 // HOME WIDGETS UPDATE
@@ -1391,11 +1437,14 @@ setInterval(()=>{
 // ═══════════════════════════════════════════════
 // BOOT
 // ═══════════════════════════════════════════════
-window.addEventListener('load',async()=>{
+window.addEventListener('load', async () => {
+  // Stato base nella cronologia: il primo gesto indietro non esce dall'app
+  history.replaceState({ screen: 'base' }, '');
+
   await initDB();
   loadSettings();
-  if(CE.ok()) navTo('lock-screen');
-  else{navTo('setup-screen');goStep('step-welcome');}
+  if (CE.ok()) navTo('lock-screen');
+  else { navTo('setup-screen'); goStep('step-welcome'); }
 });
 
 // ═══════════════════════════════════════════════
