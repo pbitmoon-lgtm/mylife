@@ -162,21 +162,77 @@ window.addEventListener('load', async () => {
 // ═══════════════════════════════════════════════
 // LOCK
 // ═══════════════════════════════════════════════
-async function pinKey(d){
-  if(S.lockPin.length>=6)return;
-  S.lockPin+=d;
-  dots('pin-dots',S.lockPin.length,false);
-  if(S.lockPin.length===6){
-    const ok=await CE.unlock(S.lockPin);
-    if(ok){await unlockApp();}
-    else{
-      dots('pin-dots',6,true);
-      document.getElementById('lock-sub').textContent='PIN errato. Riprova.';
-      setTimeout(()=>{S.lockPin='';dots('pin-dots',0,false);document.getElementById('lock-sub').textContent='Inserisci il tuo PIN';},800);
+let _pinLocked = false; // blocca il pad durante la verifica crypto
+
+async function pinKey(d) {
+  if (_pinLocked) return;           // ignora tap durante verifica
+  if (S.lockPin.length >= 6) return;
+  S.lockPin += d;
+  dots('pin-dots', S.lockPin.length, false);
+
+  if (S.lockPin.length === 6) {
+    _pinLocked = true;
+
+    // Mostra spinner subito — PBKDF2 prende ~1-2 secondi
+    document.getElementById('lock-sub').textContent = '🔓 Verifica in corso...';
+    dotsSpinner('pin-dots');         // anima i pallini
+
+    // Cede il controllo al browser per renderizzare prima di bloccarsi con crypto
+    await new Promise(r => setTimeout(r, 30));
+
+    const ok = await CE.unlock(S.lockPin);
+
+    if (ok) {
+      dotsSuccess('pin-dots');
+      await new Promise(r => setTimeout(r, 200)); // breve pausa visiva
+      await unlockApp();
+    } else {
+      dots('pin-dots', 6, true);
+      document.getElementById('lock-sub').textContent = 'PIN errato. Riprova.';
+      if (navigator.vibrate) navigator.vibrate([80, 40, 80]); // vibrazione errore
+      setTimeout(() => {
+        S.lockPin = '';
+        _pinLocked = false;
+        dots('pin-dots', 0, false);
+        document.getElementById('lock-sub').textContent = 'Inserisci il tuo PIN';
+      }, 900);
+      return;
     }
+    _pinLocked = false;
   }
 }
-function pinDel(){if(S.lockPin.length){S.lockPin=S.lockPin.slice(0,-1);dots('pin-dots',S.lockPin.length,false);}}
+
+function pinDel() {
+  if (_pinLocked) return;
+  if (S.lockPin.length) {
+    S.lockPin = S.lockPin.slice(0, -1);
+    dots('pin-dots', S.lockPin.length, false);
+  }
+}
+
+// Anima i pallini come spinner durante la verifica crypto
+function dotsSpinner(cid) {
+  const pfx = cid === 'pin-dots' ? 'd' : cid === 'setup-dots' ? 'sd' : 'cd';
+  let i = 0;
+  const interval = setInterval(() => {
+    for (let j = 0; j < 6; j++) {
+      const el = document.getElementById(`${pfx}${j}`);
+      if (!el) continue;
+      el.className = 'pin-dot' + (j === i % 6 ? ' filled' : '');
+    }
+    i++;
+    if (!_pinLocked) clearInterval(interval);
+  }, 120);
+}
+
+// Tutti i pallini verdi per un attimo prima di entrare
+function dotsSuccess(cid) {
+  const pfx = cid === 'pin-dots' ? 'd' : cid === 'setup-dots' ? 'sd' : 'cd';
+  for (let i = 0; i < 6; i++) {
+    const el = document.getElementById(`${pfx}${i}`);
+    if (el) el.className = 'pin-dot filled success';
+  }
+}
 async function unlockApp(){
   navTo('home-screen');
   await updateHomeWidgets();

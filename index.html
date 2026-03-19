@@ -81,8 +81,11 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);
 .pin-dot{width:14px;height:14px;border-radius:50%;
   border:2px solid rgba(255,255,255,.2);transition:all .2s cubic-bezier(.34,1.56,.64,1)}
 .pin-dot.filled{background:var(--accent);border-color:var(--accent);
-  transform:scale(1.15);box-shadow:0 0 12px rgba(108,142,255,.6)}
-.pin-dot.error{background:var(--red);border-color:var(--red);animation:shake .4s ease}
+  transform:scale(1.2);box-shadow:0 0 12px rgba(108,142,255,.6);
+  transition:all .15s cubic-bezier(.34,1.56,.64,1)}
+.pin-dot.error{background:var(--red);border-color:var(--red);animation:shake .4s ease;transform:scale(1)}
+.pin-dot.success{background:var(--green);border-color:var(--green);
+  transform:scale(1.2);box-shadow:0 0 14px rgba(52,214,158,.7);transition:all .15s}
 
 .pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:260px}
 .pin-key{

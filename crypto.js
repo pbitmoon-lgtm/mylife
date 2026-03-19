@@ -17,26 +17,41 @@ const WL=['abandon','ability','able','about','above','absent','absorb','abstract
 // ═══════════════════════════════════════════════
 const CE={
   key:null,
-  ok(){return!!localStorage.getItem('ml_crypto')},
-  async setup(pin){
-    const seed=crypto.getRandomValues(new Uint8Array(16));
-    const words=this.s2w(seed);
-    const salt=crypto.getRandomValues(new Uint8Array(16));
-    const pk=await this.pinKey(pin,salt);
-    const enc=await this.encRaw(seed,pk);
-    this.key=await this.dataKey(seed);
-    localStorage.setItem('ml_crypto',JSON.stringify({salt:this.hex(salt),enc,v:'2'}));
+  ok() {
+    const c = localStorage.getItem('ml_crypto');
+    if (!c) return false;
+    try {
+      const parsed = JSON.parse(c);
+      // Se il config è vecchio (senza versione iterazioni) → forza reset
+      // Questo elimina il problema delle 200k iterazioni sui vecchi utenti
+      if (!parsed.iter) return false;
+      return true;
+    } catch { return false; }
+  },
+  async setup(pin) {
+    const seed = crypto.getRandomValues(new Uint8Array(16));
+    const words = this.s2w(seed);
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iter = 10000;
+    const pk = await this.pinKey(pin, salt, iter);
+    const enc = await this.encRaw(seed, pk);
+    this.key = await this.dataKey(seed);
+    // Salva la versione delle iterazioni nel config
+    localStorage.setItem('ml_crypto', JSON.stringify({
+      salt: this.hex(salt), enc, iter, v: '3'
+    }));
     return words;
   },
-  async unlock(pin){
-    const c=JSON.parse(localStorage.getItem('ml_crypto'));
-    if(!c)return false;
-    try{
-      const pk=await this.pinKey(pin,this.unhex(c.salt));
-      const seed=await this.decRaw(c.enc,pk);
-      this.key=await this.dataKey(seed);
+  async unlock(pin) {
+    const c = JSON.parse(localStorage.getItem('ml_crypto'));
+    if (!c) return false;
+    try {
+      const iter = c.iter || 10000;
+      const pk = await this.pinKey(pin, this.unhex(c.salt), iter);
+      const seed = await this.decRaw(c.enc, pk);
+      this.key = await this.dataKey(seed);
       return true;
-    }catch{return false;}
+    } catch { return false; }
   },
   async recover(words){
     try{
@@ -44,13 +59,14 @@ const CE={
       return{seed,key:await this.dataKey(seed)};
     }catch{return null;}
   },
-  async resetPin(pin,seed){
-    const salt=crypto.getRandomValues(new Uint8Array(16));
-    const pk=await this.pinKey(pin,salt);
-    const enc=await this.encRaw(seed,pk);
-    const c=JSON.parse(localStorage.getItem('ml_crypto')||'{}');
-    c.salt=this.hex(salt);c.enc=enc;
-    localStorage.setItem('ml_crypto',JSON.stringify(c));
+  async resetPin(pin, seed) {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iter = 10000;
+    const pk = await this.pinKey(pin, salt, iter);
+    const enc = await this.encRaw(seed, pk);
+    const c = JSON.parse(localStorage.getItem('ml_crypto') || '{}');
+    c.salt = this.hex(salt); c.enc = enc; c.iter = iter; c.v = '3';
+    localStorage.setItem('ml_crypto', JSON.stringify(c));
   },
   async enc(obj){
     if(!this.key)throw new Error('locked');
@@ -64,9 +80,10 @@ const CE={
     const r=await crypto.subtle.decrypt({name:'AES-GCM',iv:this.unhex(b.iv)},this.key,this.unhex(b.d));
     return JSON.parse(new TextDecoder().decode(r));
   },
-  async pinKey(pin,salt){
-    const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveKey']);
-    return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:200000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+  async pinKey(pin, salt, iter = 10000) {
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveKey']);
+    // 10.000 iterazioni — bilanciamento tra sicurezza e velocità su mobile
+    return crypto.subtle.deriveKey({name:'PBKDF2', salt, iterations: iter, hash:'SHA-256'}, base, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']);
   },
   async dataKey(seed){
     const base=await crypto.subtle.importKey('raw',seed,'HKDF',false,['deriveKey']);
