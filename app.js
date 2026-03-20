@@ -1,573 +1,450 @@
 // ═══════════════════════════════════════════════
-// My Life — app.js
-// Core: stato globale, navigazione, boot, lock,
-//       setup wizard, recovery, home widgets
-// Dipendenze: tutti gli altri moduli
+// My Life — app.js  v3.0 DEFINITIVO
+// Core: stato, navigazione, boot, lock, setup, recovery
+// Dipende da: crypto.js, auth.js, db.js
 // ═══════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
+// ERROR HANDLER
+// ══════════════════════════════════════════════════════
+function showErr(msg) {
+  const b = document.getElementById('err');
+  b.style.display = 'block';
+  b.textContent = '⚠️ ' + msg;
+  console.error('[ERR]', msg);
+}
+window.addEventListener('error', e => showErr(e.message + ' (' + (e.filename||'').split('/').pop() + ':' + e.lineno + ')'));
+window.addEventListener('unhandledrejection', e => showErr(String(e.reason?.message || e.reason)));
 
-// ═══════════════════════════════════════════════
-// UTILS
-// ═══════════════════════════════════════════════
-function hav(a,b,c,d){const R=6371000,dA=(c-a)*Math.PI/180,dB=(d-b)*Math.PI/180;const x=Math.sin(dA/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dB/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
-function resize(file,maxW,cb){const img=new Image();img.onload=()=>{const r=Math.min(maxW/img.width,1);const c=document.createElement('canvas');c.width=img.width*r;c.height=img.height*r;c.getContext('2d').drawImage(img,0,0,c.width,c.height);cb(c.toDataURL('image/jpeg',.8));};img.src=URL.createObjectURL(file);}
-function fmtDate(ts){const d=new Date(ts);return d.toLocaleDateString('it-IT',{day:'numeric',month:'short'});}
-function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-
-// ═══════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
 // STATE
-// ═══════════════════════════════════════════════
-const S={
-  lang:'it',autoMode:false,sensitivity:'medium',
-  tracking:false,trip:null,lastPos:null,pendPos:null,
-  watchId:null,timerInt:null,startTime:null,totalDist:0,
-  map:null,poly:null,markers:[],curMarker:null,userMarker:null,
-  favMode:false,pendFav:null,selIcon:'📍',pendPhoto:null,
-  ptab:'trips',
-  setupPin:'',confirmPin:'',recovWords:[],verifyIdx:[],
-  lockPin:'',recovSeed:null,recovMode:false,
-  notes:[],curNote:null,noteBlocks:[],notePin:false,noteColor:'default',noteTags:[],
-  activeTag:null,
-  pendImport:null,
+// ══════════════════════════════════════════════════════
+const S = {
+  lockPin:'', setupPin:'', confirmPin:'',
+  recovWords:[], verifyIdx:[],
+  recovMode:false, recovSeed:null,
+  tracking:false, trip:null, lastPos:null, pendPos:null,
+  watchId:null, timerInt:null, startTime:null, totalDist:0,
+  map:null, poly:null, markers:[], curMk:null, userMk:null,
+  favMode:false, pendFav:null, selIcon:'📍',
+  pendPhoto:null,
 };
-const SENS={low:{d:200},medium:{d:80},high:{d:25}};
 
-
-
-// ═══════════════════════════════════════════════
-// NAV — History API per gesto indietro del telefono
-// ═══════════════════════════════════════════════
-let currentScreen = 'lock-screen';
-const LOCKED_SCREENS = new Set(['lock-screen','setup-screen','recovery-screen']);
-
-function navTo(id) {
-  document.querySelector('.screen.active')?.classList.remove('active');
+// ══════════════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  currentScreen = id;
-}
-
-function openSection(id) {
-  history.pushState({ screen: id }, '');
-  navTo(id);
   if (id === 'map-screen' && !S.map) initMap();
-  if (id === 'notes-screen') {
-    document.getElementById('notes-fab').classList.add('visible');
-    renderNotes();
-  } else {
-    document.getElementById('notes-fab').classList.remove('visible');
-  }
-  updateHomeWidgets();
 }
 
-function closeSection() {
-  if (history.state?.screen) history.back();
-  else _goHome();
-}
-
-function _goHome() {
-  navTo('home-screen');
-  document.getElementById('notes-fab').classList.remove('visible');
-  document.querySelectorAll('.sub-panel.open').forEach(p => p.classList.remove('open'));
-  document.getElementById('note-editor').classList.remove('open');
-  updateHomeWidgets();
-}
-
-// Intercetta il gesto indietro del telefono
-window.addEventListener('popstate', e => {
-  if (LOCKED_SCREENS.has(currentScreen)) return;
-
-  // Note editor aperto → chiudi editor prima
-  if (document.getElementById('note-editor').classList.contains('open')) {
-    document.getElementById('note-editor').classList.remove('open');
-    document.getElementById('notes-fab').classList.add('visible');
-    loadNotes().then(renderNotes);
-    history.pushState({ screen: 'notes-screen' }, '');
-    return;
-  }
-
-  // Sub-panel aperto → chiudi sub-panel prima
-  const openPanel = document.querySelector('.sub-panel.open');
-  if (openPanel) {
-    openPanel.classList.remove('open');
-    history.pushState({ screen: currentScreen }, '');
-    return;
-  }
-
-  // Altrimenti torna alla home
-  _goHome();
-});
-
-function openSubPanel(id) {
-  history.pushState({ screen: currentScreen, panel: id }, '');
-  document.getElementById(id).classList.add('open');
-}
-function closeSubPanel(id) {
-  document.getElementById(id).classList.remove('open');
-  if (history.state?.panel) history.back();
-}
-
-
-
-// ═══════════════════════════════════════════════
-// HOME WIDGETS UPDATE
-// ═══════════════════════════════════════════════
-async function updateHomeWidgets(){
-  // Time
-  const now=new Date();
-  document.getElementById('home-time').textContent=
-    now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})+' · '+
-    now.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'});
-
-  // Notes badge
-  try{
-    const notes=await dbAll('notes');
-    S.notes=notes;
-    document.getElementById('w-notes-badge').textContent=`${notes.length} note`;
-    const last=notes.sort((a,b)=>(b.updatedAt||b.id)-(a.updatedAt||a.id))[0];
-    if(last)document.getElementById('w-notes-preview').textContent=last.title||last.text||'Nota senza titolo';
-  }catch{}
-
-  // Map status
-  if(S.tracking){
-    document.getElementById('w-map-badge').textContent='● REC';
-    document.getElementById('w-map-badge').className='widget-badge live';
-  }
-}
-
-setInterval(()=>{
-  const el=document.getElementById('home-time');
-  if(el&&currentScreen==='home-screen'){
-    const now=new Date();
-    el.textContent=now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})+' · '+
-      now.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'});
-  }
-},30000);
-
-
-
-// ═══════════════════════════════════════════════════════
-// BOOT — flusso di accesso definitivo
-//
-// Logica:
-// 1. Nessun utente configurato → wizard primo avvio
-// 2. Utente configurato, stesso device → lock screen PIN
-// 3. Utente configurato, device diverso → recovery 12 parole
-// ═══════════════════════════════════════════════════════
-window.addEventListener('load', async () => {
-  history.replaceState({ screen: 'base' }, '');
-  await DB.init();
-  loadSettings();
-
-  if (!AUTH.isConfigured()) {
-    // Prima volta su questo device — nessun utente trovato
-    console.log('[boot] nessun utente → wizard');
-    navTo('setup-screen');
-    goStep('step-welcome');
-    return;
-  }
-
-  const sameDevice = await AUTH.isCurrentDevice();
-  if (!sameDevice) {
-    // File utente trovato ma device diverso
-    // (cache cancellata, telefono cambiato, browser diverso)
-    console.log('[boot] device non riconosciuto → recovery');
-    navTo('recovery-screen');
-    buildRecoveryUI('new-device');
-    return;
-  }
-
-  // Device riconosciuto → lock screen
-  console.log('[boot] device riconosciuto → lock screen');
-  navTo('lock-screen');
-});
-
-
-
-// ═══════════════════════════════════════════════════════
-// LOCK — sblocco con PIN
-// ═══════════════════════════════════════════════════════
-let _pinLocked = false;
-
-async function pinKey(d) {
-  if (_pinLocked) return;
-  if (S.lockPin.length >= 6) return;
-  S.lockPin += d;
-  dots('pin-dots', S.lockPin.length, false);
-
-  if (S.lockPin.length === 6) {
-    _pinLocked = true;
-
-    // Mostra feedback immediato
-    document.getElementById('lock-sub').textContent = '🔓 Verifica...';
-    await new Promise(r => setTimeout(r, 30)); // lascia aggiornare UI
-
-    let result = false;
-    try {
-      result = await AUTH.unlock(S.lockPin);
-    } catch (e) {
-      console.error('[lock]', e);
-    }
-
-    if (result === true) {
-      // PIN corretto — entra
-      dotsSuccess('pin-dots');
-      await new Promise(r => setTimeout(r, 150));
-      _pinLocked = false;
-      await unlockApp();
-
-    } else if (result === 'wrong_device') {
-      // Device cambiato — vai a recovery
-      _pinLocked = false;
-      S.lockPin  = '';
-      dots('pin-dots', 0, false);
-      navTo('recovery-screen');
-      buildRecoveryUI('new-device');
-
-    } else {
-      // PIN sbagliato
-      dots('pin-dots', 6, true);
-      document.getElementById('lock-sub').textContent = 'PIN errato. Riprova.';
-      if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
-      setTimeout(() => {
-        S.lockPin  = '';
-        _pinLocked = false;
-        dots('pin-dots', 0, false);
-        document.getElementById('lock-sub').textContent =
-          'La tua privacy, sulla chain, per sempre';
-      }, 900);
-    }
-  }
-}
-
-function pinDel() {
-  if (_pinLocked) return;
-  if (S.lockPin.length > 0) {
-    S.lockPin = S.lockPin.slice(0, -1);
-    dots('pin-dots', S.lockPin.length, false);
-  }
-}
-
-// Animazione pallini successo (verdi)
-function dotsSuccess(cid) {
-  const pfx = cid === 'pin-dots' ? 'd' : cid === 'setup-dots' ? 'sd' : 'cd';
-  for (let i = 0; i < 6; i++) {
-    const el = document.getElementById(`${pfx}${i}`);
-    if (el) el.className = 'pin-dot success';
-  }
-}
-
-// Aggiorna i pallini (vuoti / pieni / errore)
-function dots(cid, n, err) {
-  const pfx = cid === 'pin-dots' ? 'd' : cid === 'setup-dots' ? 'sd' : 'cd';
-  for (let i = 0; i < 6; i++) {
-    const el = document.getElementById(`${pfx}${i}`);
-    if (!el) continue;
-    el.className = 'pin-dot' +
-      (err ? ' error' : i < n ? ' filled' : '');
-  }
-}
-
-async function unlockApp() {
-  navTo('home-screen');
-  await updateHomeWidgets();
-}
-
-function lockApp() {
-  AUTH.lock();
-  if (S.tracking) stopTracking();
-  document.getElementById('note-editor').classList.remove('open');
-  S.lockPin  = '';
-  _pinLocked = false;
-  navTo('lock-screen');
-}
-
-// Reset completo — ULTIMA RISORSA
-// Cancella tutto: utente, dati, impostazioni
-function resetAppData() {
-  if (!confirm(
-    'ATTENZIONE\n\n' +
-    'Questa operazione cancella TUTTI i tuoi dati:\n' +
-    '- Viaggi, note, preferiti\n' +
-    '- Account e PIN\n\n' +
-    'Usa questa opzione SOLO se hai perso le 12 parole ' +
-    'e non puoi più accedere in nessun altro modo.\n\n' +
-    'Sei sicuro?'
-  )) return;
-
-  AUTH.fullReset();
-  DB.clearAll().catch(console.error);
-  localStorage.clear();
-  location.reload();
-}
-
-
-
-// ═══════════════════════════════════════════════════════
-// SETUP — wizard primo avvio
-// ═══════════════════════════════════════════════════════
-function goStep(id) {
-  document.querySelectorAll('.wizard-step')
-    .forEach(s => s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
+function showStep(id) {
+  ['step-welcome','step-pin','step-confirm','step-phrase','step-verify']
+    .forEach(s => document.getElementById(s).style.display = 'none');
+  document.getElementById(id).style.display = 'flex';
+  // Costruisce la UI di verifica quando si arriva allo step
   if (id === 'step-verify') buildVerifyUI();
 }
 
-function setupKey(d) {
-  if (S.setupPin.length >= 6) return;
-  S.setupPin += d;
-  dots('setup-dots', S.setupPin.length, false);
-  if (S.setupPin.length === 6) setTimeout(() => goStep('step-confirm'), 200);
-}
+// ══════════════════════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════════════════════
+window.addEventListener('load', async () => {
+  try {
+    await initDB();
 
-function setupDel() {
-  S.setupPin = S.setupPin.slice(0, -1);
-  dots('setup-dots', S.setupPin.length, false);
-}
-
-async function confirmKey(d) {
-  if (S.confirmPin.length >= 6) return;
-  S.confirmPin += d;
-  dots('confirm-dots', S.confirmPin.length, false);
-
-  if (S.confirmPin.length === 6) {
-
-    if (S.confirmPin !== S.setupPin) {
-      // PIN non corrisponde
-      dots('confirm-dots', 6, true);
-      setTimeout(() => {
-        S.confirmPin = '';
-        dots('confirm-dots', 0, false);
-      }, 800);
+    if (!UF.exists()) {
+      console.log('[boot] primo avvio');
+      showScreen('setup-screen');
+      showStep('step-welcome');
       return;
     }
 
-    // PIN confermato — procedi
-    setTimeout(async () => {
-      const subEl = document.querySelector('#step-confirm .wizard-sub');
+    const same = await UF.sameDevice();
+    if (!same) {
+      console.log('[boot] device diverso');
+      showScreen('recovery-screen');
+      buildRecovery('new-device');
+      return;
+    }
 
-      if (S.recovMode) {
-        // Migrazione su nuovo device dopo recovery
-        try {
-          if (subEl) subEl.textContent = '⚙️ Configurazione nuovo device...';
-          await AUTH.migrateToDevice(S.setupPin, S.recovSeed);
-          S.recovMode = false;
-          S.recovSeed = null;
-          document.querySelectorAll('.wizard-step')
-            .forEach(s => s.classList.remove('active'));
-          await unlockApp();
-        } catch (e) {
-          console.error('[setup] migrazione error:', e);
-          if (subEl) subEl.textContent = 'Errore. Riprova.';
-        }
+    console.log('[boot] lock screen');
+    showScreen('lock-screen');
 
-      } else {
-        // Setup normale — primo avvio
-        try {
-          if (subEl) subEl.textContent = '⚙️ Configurazione sicurezza...';
-          // AUTH.setup fa calibrazione PBKDF2 (~2s prima volta)
-          S.recovWords = await AUTH.setup(S.setupPin);
+  } catch(e) {
+    showErr('Boot error: ' + e.message);
+  }
+});
 
-          // Mostra le 12 parole
-          document.getElementById('phrase-grid').innerHTML =
-            S.recovWords.map((w, i) =>
-              `<div class="phrase-word">
-                <span class="phrase-num">${String(i+1).padStart(2,'0')}</span>
-                <span class="phrase-w">${w}</span>
-              </div>`
-            ).join('');
-          goStep('step-phrase');
+// ══════════════════════════════════════════════════════
+// LOCK — PIN istantaneo (SHA-256, no PBKDF2)
+// ══════════════════════════════════════════════════════
+let _locking = false;
 
-        } catch (e) {
-          console.error('[setup] error:', e);
-          if (subEl) subEl.textContent = 'Errore nella configurazione. Riprova.';
-        }
-      }
-    }, 200);
+async function lockKey(d) {
+  if (_locking || S.lockPin.length >= 6) return;
+  S.lockPin += d;
+  updDots('lock-dots', 'lock-dots', S.lockPin.length, false);
+
+  if (S.lockPin.length === 6) {
+    _locking = true;
+    document.getElementById('lock-sub').textContent = '🔓 Verifica...';
+    await tick();
+
+    try {
+      const u = UF.read();
+      if (!u) { showErr('Nessun utente'); _locking=false; return; }
+
+      const deviceId = await getDeviceId();
+      const pinKey   = await CR.pinToKey(S.lockPin, deviceId);
+
+      // Decifra il seed con la chiave PIN
+      const seedRaw = await CR.dec(u.encSeed, pinKey);
+      const seed    = new Uint8Array(seedRaw);
+
+      // Attiva chiave dati
+      CR._key = await CR.seedToDataKey(seed);
+
+      // Successo
+      setDots('lock-dots', 'ok');
+      await sleep(150);
+      _locking = false;
+      enterApp();
+
+    } catch(e) {
+      console.log('[lock] PIN errato:', e.message);
+      setDots('lock-dots', 'err');
+      document.getElementById('lock-sub').textContent = 'PIN errato. Riprova.';
+      if (navigator.vibrate) navigator.vibrate([80,40,80]);
+      await sleep(900);
+      S.lockPin = '';
+      _locking  = false;
+      updDots('lock-dots', 'lock-dots', 0, false);
+      document.getElementById('lock-sub').textContent = 'La tua privacy, sulla chain, per sempre';
+    }
   }
 }
 
-function confirmDel() {
-  S.confirmPin = S.confirmPin.slice(0, -1);
-  dots('confirm-dots', S.confirmPin.length, false);
+function lockDel() {
+  if (_locking) return;
+  if (S.lockPin.length > 0) {
+    S.lockPin = S.lockPin.slice(0,-1);
+    updDots('lock-dots', 'lock-dots', S.lockPin.length, false);
+  }
 }
 
-// Costruisce la griglia di verifica delle 12 parole
-// Chiede 4 parole a caso per confermare che l'utente le ha scritte
+// ══════════════════════════════════════════════════════
+// SETUP
+// ══════════════════════════════════════════════════════
+function setupKey(d) {
+  if (S.setupPin.length >= 6) return;
+  S.setupPin += d;
+  updDots('setup-dots', 'setup', S.setupPin.length, false);
+  if (S.setupPin.length === 6) setTimeout(() => showStep('step-confirm'), 200);
+}
+function setupDel() {
+  S.setupPin = S.setupPin.slice(0,-1);
+  updDots('setup-dots', 'setup', S.setupPin.length, false);
+}
+
+let _confirming = false;
+async function confirmKey(d) {
+  if (_confirming || S.confirmPin.length >= 6) return;
+  S.confirmPin += d;
+  updDots('confirm-dots', 'confirm', S.confirmPin.length, false);
+
+  if (S.confirmPin.length === 6) {
+    if (S.confirmPin !== S.setupPin) {
+      setDots('confirm-dots', 'err');
+      await sleep(800);
+      S.confirmPin = '';
+      updDots('confirm-dots', 'confirm', 0, false);
+      return;
+    }
+
+    _confirming = true;
+    const sub = document.getElementById('confirm-sub');
+    if (sub) sub.textContent = '⚙️ Configurazione...';
+    await tick();
+
+    try {
+      if (S.recovMode) {
+        // Migrazione: riconfigura utente su questo device
+        const deviceId = await getDeviceId();
+        const pinKey   = await CR.pinToKey(S.setupPin, deviceId);
+        const encSeed  = await CR.enc(S.recovSeed, pinKey);
+        const existing = UF.read();
+
+        UF.write({
+          v: '3',
+          userId:    existing?.userId || h(crypto.getRandomValues(new Uint8Array(16))),
+          deviceId,
+          created:   existing?.created || today(),
+          migratedAt: today(),
+          encSeed,
+          backupVerified: true,
+        });
+
+        CR._key     = await CR.seedToDataKey(S.recovSeed);
+        S.recovMode = false;
+        S.recovSeed = null;
+        _confirming = false;
+        enterApp();
+
+      } else {
+        // Primo avvio: crea utente
+        const seed     = crypto.getRandomValues(new Uint8Array(32));
+        const words    = CR.seedToWords(seed);
+        const deviceId = await getDeviceId();
+        const pinKey   = await CR.pinToKey(S.setupPin, deviceId);
+        const encSeed  = await CR.enc(seed, pinKey);
+
+        UF.write({
+          v: '3',
+          userId:   h(crypto.getRandomValues(new Uint8Array(16))),
+          deviceId,
+          created:  today(),
+          encSeed,
+          backupVerified: false,
+        });
+
+        CR._key      = await CR.seedToDataKey(seed);
+        S.recovWords = words;
+        _confirming  = false;
+
+        // Mostra 12 parole
+        document.getElementById('phrase-grid').innerHTML =
+          words.map((w,i) =>
+            `<div class="phrase-word">
+              <span class="pnum">${String(i+1).padStart(2,'0')}</span>
+              <span class="pword">${w}</span>
+            </div>`
+          ).join('');
+        showStep('step-phrase');
+      }
+
+    } catch(e) {
+      _confirming = false;
+      showErr('Setup error: ' + e.message);
+    }
+  }
+}
+function confirmDel() {
+  if (_confirming) return;
+  S.confirmPin = S.confirmPin.slice(0,-1);
+  updDots('confirm-dots', 'confirm', S.confirmPin.length, false);
+}
+
 function buildVerifyUI() {
   S.verifyIdx = [];
   while (S.verifyIdx.length < 4) {
-    const n = Math.floor(Math.random() * 12);
+    const n = Math.floor(Math.random()*12);
     if (!S.verifyIdx.includes(n)) S.verifyIdx.push(n);
   }
-  S.verifyIdx.sort((a, b) => a - b);
-
-  document.getElementById('verify-grid').innerHTML =
-    S.verifyIdx.map(i =>
-      `<div class="recovery-row">
-        <span class="recovery-num">#${i + 1}</span>
-        <input class="recovery-input" data-i="${i}"
-          placeholder="parola ${i + 1}..."
-          autocomplete="off" autocorrect="off"
-          spellcheck="false" oninput="checkVerify()">
-      </div>`
-    ).join('');
+  S.verifyIdx.sort((a,b)=>a-b);
+  document.getElementById('verify-grid').innerHTML = S.verifyIdx.map(i =>
+    `<div class="rrow">
+      <span class="rnum">#${i+1}</span>
+      <input class="rinput" data-i="${i}" placeholder="parola ${i+1}..."
+        autocomplete="off" autocorrect="off" spellcheck="false" oninput="chkVerify()">
+    </div>`
+  ).join('');
 }
 
-function checkVerify() {
-  let allOk = true;
-  document.querySelectorAll('#verify-grid .recovery-input').forEach(inp => {
+function chkVerify() {
+  let ok = true;
+  document.querySelectorAll('#verify-grid .rinput').forEach(inp => {
     const v = inp.value.trim().toLowerCase();
-    if (!v) {
-      inp.className = 'recovery-input';
-      allOk = false;
-    } else if (v === S.recovWords[+inp.dataset.i]) {
-      inp.className = 'recovery-input ok';
-    } else {
-      inp.className = 'recovery-input err';
-      allOk = false;
-    }
+    if (!v) { inp.className='rinput'; ok=false; }
+    else if (v === S.recovWords[+inp.dataset.i]) inp.className='rinput ok';
+    else { inp.className='rinput err'; ok=false; }
   });
-  document.getElementById('verify-btn').disabled = !allOk;
+  document.getElementById('verify-btn').disabled = !ok;
 }
 
 async function finishSetup() {
-  AUTH.markBackupVerified();
-  document.querySelectorAll('.wizard-step')
-    .forEach(s => s.classList.remove('active'));
-  await unlockApp();
+  try {
+    const u = UF.read();
+    if (u) { u.backupVerified = true; UF.write(u); }
+    await enterApp();
+  } catch(e) {
+    showErr('finishSetup error: ' + e.message);
+  }
 }
 
-
-
-// ═══════════════════════════════════════════════════════
-// RECOVERY — accesso con 12 parole
-// Usato per: PIN dimenticato, device nuovo, cache cancellata
-// ═══════════════════════════════════════════════════════
-function buildRecoveryUI(mode) {
-  const titleEl = document.getElementById('rec-title');
-  const subEl   = document.getElementById('rec-sub-text');
-  const errEl   = document.getElementById('rec-err');
-
+// ══════════════════════════════════════════════════════
+// RECOVERY
+// ══════════════════════════════════════════════════════
+function buildRecovery(mode) {
+  const t = document.getElementById('rec-title');
+  const s = document.getElementById('rec-sub');
   if (mode === 'new-device') {
-    if (titleEl) titleEl.textContent = '📱 Nuovo dispositivo';
-    if (subEl)   subEl.textContent   =
-      'Questo dispositivo non è riconosciuto. ' +
-      'Inserisci le 12 parole di backup per trasferire il tuo account.';
+    if (t) t.textContent = '📱 Nuovo dispositivo';
+    if (s) s.textContent = 'Inserisci le 12 parole per trasferire il tuo account su questo telefono.';
   } else {
-    if (titleEl) titleEl.textContent = '🔑 Recupero accesso';
-    if (subEl)   subEl.textContent   =
-      'Inserisci le tue 12 parole di backup per accedere.';
+    if (t) t.textContent = '🔑 Recupero accesso';
+    if (s) s.textContent = 'Inserisci le 12 parole di backup.';
   }
-
-  if (errEl) errEl.textContent = '';
-
-  document.getElementById('recovery-grid').innerHTML =
-    Array.from({ length: 12 }, (_, i) =>
-      `<div class="recovery-row">
-        <span class="recovery-num">#${i + 1}</span>
-        <input class="recovery-input" id="rw${i}"
-          placeholder="parola ${i + 1}..."
-          autocomplete="off" autocorrect="off"
-          spellcheck="false"
+  document.getElementById('rec-err').textContent = '';
+  document.getElementById('rec-grid').innerHTML =
+    Array.from({length:12},(_,i) =>
+      `<div class="rrow">
+        <span class="rnum">#${i+1}</span>
+        <input class="rinput" id="rw${i}" placeholder="parola ${i+1}..."
+          autocomplete="off" autocorrect="off" spellcheck="false"
           style="text-transform:lowercase">
       </div>`
     ).join('');
 }
 
-function showRecovery() {
-  navTo('recovery-screen');
-  buildRecoveryUI('forgot-pin');
-}
-
 async function doRecovery() {
-  const words = Array.from({ length: 12 }, (_, i) => {
-    const el = document.getElementById(`rw${i}`);
+  const words = Array.from({length:12},(_,i)=>{
+    const el = document.getElementById('rw'+i);
     return el ? el.value.trim().toLowerCase() : '';
   });
 
-  const errEl = document.getElementById('rec-err');
-  if (errEl) {
-    errEl.style.color   = 'var(--text2)';
-    errEl.textContent   = '🔍 Verifica parole in corso...';
-  }
+  const e = document.getElementById('rec-err');
+  e.style.color = 'var(--text2)';
+  e.textContent = '🔍 Verifica parole...';
 
-  const result = await AUTH.recoverWithWords(words);
-
-  if (!result) {
-    if (errEl) {
-      errEl.style.color = 'var(--red)';
-      errEl.textContent =
-        '❌ Parole non corrette. Controlla l'ordine e riprova.';
-    }
+  const seed = CR.wordsToSeed(words);
+  if (!seed) {
+    e.style.color = 'var(--red)';
+    e.textContent = '❌ Parole non corrette. Controlla e riprova.';
     return;
   }
 
-  // Parole corrette — vai a scegliere nuovo PIN per questo device
-  S.recovSeed  = result.seed;
-  AUTH._activeKey = result.key; // attiva chiave provvisoriamente
-  S.recovMode  = true;
-  S.setupPin   = '';
+  // Parole corrette — vai a impostare nuovo PIN
+  S.recovSeed = seed;
+  S.recovMode = true;
+  S.setupPin  = '';
   S.confirmPin = '';
-
-  navTo('setup-screen');
-  goStep('step-pin');
+  showScreen('setup-screen');
+  showStep('step-pin');
+  document.getElementById('pin-sub').textContent = 'Scegli un nuovo PIN per questo dispositivo.';
 }
 
-// ═══════════════════════════════════════════════
-// PIN KEY TOUCH HANDLER — risposta immediata su mobile
-// ═══════════════════════════════════════════════
-(function(){
-  // Mappa funzioni per i tasti PIN
-  const FN = {
-    pinKey, pinDel, setupKey, setupDel, confirmKey, confirmDel
-  };
+// ══════════════════════════════════════════════════════
+// APP
+// ══════════════════════════════════════════════════════
+async function enterApp() {
+  updateHomeTime();
+  setInterval(updateHomeTime, 30000);
+  try {
+    const notes = await dbAll('notes');
+    document.getElementById('w-notes-badge').textContent = notes.length + ' note';
+  } catch {}
+  showScreen('home-screen');
+}
 
-  function handlePinKey(el, e) {
-    if (el.classList.contains('empty')) return;
-    e.preventDefault(); // blocca il click successivo su mobile
+function updateHomeTime() {
+  const el = document.getElementById('home-time');
+  if (!el) return;
+  const now = new Date();
+  el.textContent =
+    now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}) + ' · ' +
+    now.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'});
+}
 
-    // Feedback visivo immediato
-    el.classList.add('pressed');
-    setTimeout(() => el.classList.remove('pressed'), 150);
+function lockApp() {
+  CR.lock();
+  if (S.tracking) stopTrip();
+  S.lockPin = '';
+  showScreen('lock-screen');
+  updDots('lock-dots','lock-dots',0,false);
+  document.getElementById('lock-sub').textContent = 'La tua privacy, sulla chain, per sempre';
+}
 
-    // Vibrazione leggera se disponibile
-    if (navigator.vibrate) navigator.vibrate(10);
+function confirmReset() {
+  if (!confirm(
+    'ATTENZIONE\n\n' +
+    'Questa operazione cancella TUTTI i dati:\n' +
+    '- Viaggi, note, preferiti\n' +
+    '- Account e PIN\n\n' +
+    'Usare SOLO se hai perso le 12 parole.\n\n' +
+    'Sei sicuro?'
+  )) return;
+  localStorage.clear();
+  indexedDB.deleteDatabase('MyLife');
+  location.reload();
+}
 
-    // Esegui la funzione
-    const fn = el.dataset.fn;
-    const val = el.dataset.val;
-    if (fn && FN[fn]) {
-      if (val !== undefined) FN[fn](val);
-      else FN[fn]();
-    }
+// ══════════════════════════════════════════════════════
+// PIN PAD TOUCH HANDLER
+// ══════════════════════════════════════════════════════
+const KEY_FNS = {
+  lockKey, lockDel,
+  setupKey, setupDel,
+  confirmKey, confirmDel
+};
+
+// Mappa dots prefix
+function dotPfx(id) {
+  if (id === 'lock-dots') return 'd';
+  if (id === 'setup-dots') return 's';
+  if (id === 'confirm-dots') return 'c';
+  return 'd';
+}
+
+function updDots(dotId, _, n, err) {
+  const pfx = dotPfx(dotId);
+  for (let i=0; i<6; i++) {
+    const el = document.getElementById(pfx+i);
+    if (!el) continue;
+    el.className = 'dot' + (err?' err': i<n?' on':'');
   }
+}
 
-  // touchstart — risposta immediata, nessun delay
-  document.addEventListener('touchstart', e => {
-    const touch = e.changedTouches[0];
-    // Cerca sia dal target diretto che dal punto di tocco (più affidabile)
-    let key = e.target.closest('.pin-key');
-    if (!key) {
-      // Fallback: cerca l'elemento sotto il punto esatto di tocco
-      const el = document.elementFromPoint(touch.clientX, touch.clientY);
-      if (el) key = el.closest('.pin-key');
-    }
-    if (key) {
-      key._touched = true;
-      handlePinKey(key, e);
-    }
-  }, {passive: false});
+function setDots(dotId, state) {
+  const pfx = dotPfx(dotId);
+  for (let i=0; i<6; i++) {
+    const el = document.getElementById(pfx+i);
+    if (el) el.className = 'dot ' + state;
+  }
+}
 
-  // touchend: rimuovi il flag
-  document.addEventListener('touchend', e => {
-    const key = e.target.closest('.pin-key');
-    if (key) setTimeout(() => { key._touched = false; }, 300);
-  }, {passive: true});
+let _lastTouch = 0;
+document.addEventListener('touchstart', e => {
+  const key = e.target.closest('.key');
+  if (!key || key.classList.contains('empty')) return;
+  e.preventDefault();
+  _lastTouch = Date.now();
+  key.classList.add('pressed');
+  setTimeout(()=>key.classList.remove('pressed'), 150);
+  if (navigator.vibrate) navigator.vibrate(8);
+  const fn = key.dataset.fn;
+  const v  = key.dataset.v;
+  if (fn && KEY_FNS[fn]) v ? KEY_FNS[fn](v) : KEY_FNS[fn]();
+}, {passive:false});
 
-  // Fallback click per desktop (non su mobile — già gestito da touchstart)
-  document.addEventListener('click', e => {
-    const key = e.target.closest('.pin-key');
-    if (!key || key._touched) return; // evita doppio fuoco su mobile
-    handlePinKey(key, e);
-  });
-})();
+document.addEventListener('click', e => {
+  if (Date.now() - _lastTouch < 500) return; // evita doppio su mobile
+  const key = e.target.closest('.key');
+  if (!key || key.classList.contains('empty')) return;
+  const fn = key.dataset.fn;
+  const v  = key.dataset.v;
+  if (fn && KEY_FNS[fn]) v ? KEY_FNS[fn](v) : KEY_FNS[fn]();
+});
+
+// Intercept back gesture
+window.addEventListener('popstate', () => {
+  const active = document.querySelector('.screen.active');
+  if (active && active.id !== 'home-screen' && active.id !== 'lock-screen') {
+    history.pushState({}, '');
+    if (active.id === 'map-screen') showScreen('home-screen');
+  }
+});
+window.history.pushState({}, '');
+
+// ══════════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════════
+function hav(a,b,c,d) {
+  const R=6371000,da=(c-a)*Math.PI/180,db=(d-b)*Math.PI/180;
+  const x=Math.sin(da/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(db/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+function today() { return new Date().toISOString().split('T')[0]; }
+function tick() { return new Promise(r => setTimeout(r, 30)); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 

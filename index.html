@@ -11,6 +11,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
+
 :root{
   --bg:#070710;--surface:rgba(255,255,255,.07);--surface2:rgba(255,255,255,.12);
   --border:rgba(255,255,255,.1);--text:#f4f4fb;--text2:#9090b8;--text3:#45455a;
@@ -160,7 +161,220 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
 @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+
+/* ─── MAP MODAL ─── */
+.map-modal{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;
+  display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(8px)}
+.map-modal.open{display:flex}
+.map-modal-inner{background:#13131f;border:1px solid var(--border);border-radius:24px 24px 0 0;
+  padding:20px 16px 36px;width:100%;max-width:480px;animation:slideUp .3s ease;max-height:85vh;overflow-y:auto}
+.mm-title{font-size:16px;font-weight:700;margin-bottom:14px;text-align:center}
+.mm-icons{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;justify-content:center}
+.mm-icon{width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.07);
+  border:2px solid transparent;font-size:22px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:all .15s}
+.mm-icon.sel{border-color:var(--accent);background:rgba(108,142,255,.15)}
+.mm-input{width:100%;background:rgba(255,255,255,.07);border:1px solid var(--border);
+  border-radius:12px;padding:12px 14px;font-family:'Sora',sans-serif;font-size:14px;
+  color:var(--text);outline:none;margin-bottom:10px}
+.mm-input:focus{border-color:var(--accent)}
+
+/* ─── TRIPS PANEL ─── */
+.side-panel{position:fixed;inset:0;background:var(--bg);z-index:50;
+  display:none;flex-direction:column;animation:slideUp .3s ease}
+.side-panel.open{display:flex}
+.sp-header{padding:52px 16px 14px;display:flex;align-items:center;gap:12px;
+  border-bottom:1px solid var(--border)}
+.sp-title{font-size:18px;font-weight:700;flex:1}
+.sp-close{width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.07);
+  border:none;cursor:pointer;font-size:18px;color:var(--text2);
+  display:flex;align-items:center;justify-content:center}
+.sp-body{flex:1;overflow-y:auto;padding:16px}
+.sp-tabs{display:flex;border-bottom:1px solid var(--border)}
+.sp-tab{flex:1;padding:10px;text-align:center;font-size:13px;font-weight:600;
+  color:var(--text2);cursor:pointer;border-bottom:2px solid transparent}
+.sp-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.trip-card{background:rgba(255,255,255,.05);border:1px solid var(--border);
+  border-radius:14px;padding:14px 16px;margin-bottom:10px;cursor:pointer}
+.trip-card-head{display:flex;justify-content:space-between;margin-bottom:8px}
+.trip-name{font-size:14px;font-weight:700}
+.trip-date{font-size:11px;color:var(--text2)}
+.trip-meta{display:flex;gap:16px;flex-wrap:wrap}
+.trip-meta span{font-size:12px;color:var(--text2)}
+.trip-meta b{color:var(--text);font-weight:600}
+.fav-card{background:rgba(255,255,255,.05);border:1px solid var(--border);
+  border-radius:14px;padding:12px 14px;margin-bottom:10px;
+  display:flex;align-items:center;gap:12px}
+.fav-ico{font-size:22px;width:42px;height:42px;background:rgba(255,255,255,.07);
+  border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fav-info{flex:1;min-width:0}
+.fav-name{font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fav-coord{font-size:10px;color:var(--text2);margin-top:2px}
+.fav-note{font-size:11px;color:var(--text2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fav-acts{display:flex;gap:6px}
+.fav-act{width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,.07);
+  border:1px solid var(--border);cursor:pointer;font-size:13px;
+  display:flex;align-items:center;justify-content:center}
+.no-items{text-align:center;color:var(--text2);font-size:14px;padding:40px 0}
+
+/* ─── NOTES SCREEN ─── */
+#notes-screen{position:fixed;inset:0;background:var(--bg);z-index:20;
+  display:none;flex-direction:column;animation:slideUp .3s ease}
+#notes-screen.open{display:flex}
+.ns-header{padding:52px 16px 10px;display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid var(--border);flex-shrink:0}
+.ns-title{font-size:18px;font-weight:700;flex:1}
+.ns-search-wrap{padding:10px 16px;position:relative;flex-shrink:0}
+.ns-search{width:100%;background:rgba(255,255,255,.07);border:1px solid var(--border);
+  border-radius:12px;padding:10px 14px 10px 36px;font-family:'Sora',sans-serif;
+  font-size:14px;color:var(--text);outline:none}
+.ns-search:focus{border-color:var(--accent)}
+.ns-search-ico{position:absolute;left:26px;top:50%;transform:translateY(-50%);
+  font-size:14px;color:var(--text2);pointer-events:none}
+#notes-tag-bar{padding:0 12px 8px;display:flex;gap:6px;overflow-x:auto;flex-shrink:0}
+#notes-tag-bar::-webkit-scrollbar{display:none}
+.tag-chip{padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;
+  background:rgba(255,255,255,.07);border:1px solid var(--border);
+  color:var(--text2);cursor:pointer;white-space:nowrap;flex-shrink:0}
+.tag-chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.ns-body{flex:1;overflow-y:auto;padding:0 10px 20px}
+.ns-body::-webkit-scrollbar{display:none}
+#notes-grid{columns:2;column-gap:10px;margin-top:10px}
+.note-card{break-inside:avoid;margin-bottom:10px;border-radius:16px;
+  border:1px solid var(--border);padding:12px;cursor:pointer;
+  transition:transform .15s;display:block;position:relative}
+.note-card:active{transform:scale(.97)}
+.note-card.pinned::before{content:'📌';position:absolute;top:8px;right:8px;font-size:12px}
+.note-title{font-size:14px;font-weight:700;margin-bottom:6px;letter-spacing:-.2px;
+  overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.note-preview{font-size:12px;color:var(--text2);line-height:1.5;
+  overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}
+.note-checks{font-size:12px;color:var(--text2);margin-bottom:4px;line-height:1.6}
+.note-img-prev{width:100%;border-radius:10px;margin-bottom:8px;max-height:110px;object-fit:cover}
+.note-footer{display:flex;align-items:center;justify-content:space-between;margin-top:8px}
+.note-tags{display:flex;gap:4px;flex-wrap:wrap}
+.ntag{font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(108,142,255,.15);color:var(--accent)}
+.note-date{font-size:10px;color:var(--text3)}
+#notes-fab{position:fixed;bottom:28px;right:16px;z-index:30;
+  width:52px;height:52px;border-radius:18px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border:none;color:#fff;font-size:26px;cursor:pointer;
+  box-shadow:0 6px 24px rgba(108,142,255,.4);
+  display:none;align-items:center;justify-content:center}
+#notes-fab.visible{display:flex}
+
+/* ─── NOTE EDITOR ─── */
+#note-editor{position:fixed;inset:0;z-index:40;background:var(--bg);
+  display:none;flex-direction:column;animation:slideUp .25s ease}
+#note-editor.open{display:flex}
+.ed-header{padding:52px 14px 12px;display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid var(--border);flex-shrink:0}
+#ed-back{width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,.07);
+  border:none;cursor:pointer;font-size:18px;color:var(--text2)}
+#ed-title{flex:1;background:none;border:none;font-family:'Sora',sans-serif;
+  font-size:18px;font-weight:700;color:var(--text);outline:none;letter-spacing:-.2px}
+.ed-actions{display:flex;gap:6px}
+.ed-btn{width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.07);
+  border:none;cursor:pointer;font-size:16px;color:var(--text2)}
+.ed-btn.on{background:rgba(108,142,255,.2);color:var(--accent)}
+#color-bar{display:none;padding:8px 14px;gap:8px;overflow-x:auto;
+  border-bottom:1px solid var(--border);flex-shrink:0}
+.cswatch{width:28px;height:28px;border-radius:50%;cursor:pointer;
+  flex-shrink:0;border:3px solid transparent;transition:transform .15s}
+.cswatch.sel{border-color:#fff}
+#tag-bar-ed{display:none;padding:8px 16px;gap:6px;align-items:center;
+  border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+.ed-tag{font-size:11px;padding:4px 10px;border-radius:20px;
+  background:rgba(108,142,255,.15);color:var(--accent);cursor:pointer;
+  display:flex;align-items:center;gap:4px}
+#ed-tag-inp{background:none;border:none;font-family:'Sora',sans-serif;
+  font-size:13px;color:var(--text);outline:none;min-width:100px}
+.ed-body{flex:1;overflow-y:auto;padding:14px}
+.ed-body::-webkit-scrollbar{display:none}
+#ed-text{min-height:200px;background:none;border:none;
+  font-family:'Sora',sans-serif;font-size:15px;color:var(--text);
+  outline:none;resize:none;width:100%;line-height:1.8}
+.nb{margin-bottom:14px}
+.nb-img-wrap{position:relative;display:block;width:100%}
+.nb-img-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%;
+  border-radius:12px;cursor:crosshair}
+.nb-img-wrap img{width:100%;border-radius:12px;display:block}
+.nb-toolbar{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center}
+.nb-tool{padding:5px 10px;border-radius:20px;background:rgba(255,255,255,.07);
+  border:1px solid var(--border);font-size:11px;color:var(--text2);cursor:pointer;
+  font-family:'Sora',sans-serif}
+.nb-tool.on{background:rgba(108,142,255,.2);border-color:var(--accent);color:var(--accent)}
+.nb-tool.danger{color:var(--red)}
+.nb-colors{display:flex;gap:5px;align-items:center}
+.nb-col{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid transparent}
+.nb-col.sel{border-color:#fff}
+.nb-checklist{background:rgba(255,255,255,.05);border:1px solid var(--border);
+  border-radius:14px;padding:12px}
+.ci{display:flex;align-items:center;gap:10px;padding:6px 0;
+  border-bottom:1px solid rgba(255,255,255,.05)}
+.ci:last-of-type{border-bottom:none}
+.ci-box{width:20px;height:20px;border-radius:6px;border:2px solid var(--border);
+  cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.ci-box.on{background:var(--accent);border-color:var(--accent)}
+.ci-box.on::after{content:'✓';font-size:12px;color:#fff;font-weight:700}
+.ci-text{flex:1;background:none;border:none;font-family:'Sora',sans-serif;
+  font-size:14px;color:var(--text);outline:none}
+.ci-text.done{text-decoration:line-through;color:var(--text3)}
+.ci-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px}
+.add-ci{width:100%;padding:8px;background:none;border:1px dashed var(--border);
+  border-radius:10px;color:var(--text2);font-family:'Sora',sans-serif;font-size:13px;
+  cursor:pointer;margin-top:8px}
+.nb-divider{border:none;border-top:1px solid rgba(255,255,255,.08);margin:8px 0}
+.ed-fabs{padding:10px 14px;display:flex;gap:8px;border-top:1px solid var(--border);
+  flex-shrink:0;overflow-x:auto}
+.ed-fabs::-webkit-scrollbar{display:none}
+.ed-fab{padding:9px 14px;border-radius:20px;background:rgba(255,255,255,.07);
+  border:1px solid var(--border);font-size:12px;color:var(--text2);cursor:pointer;
+  white-space:nowrap;font-family:'Sora',sans-serif;display:flex;align-items:center;gap:5px;flex-shrink:0}
+
+/* ─── CHAT SCREEN ─── */
+#chat-screen{position:fixed;inset:0;background:var(--bg);z-index:20;
+  display:none;flex-direction:column}
+#chat-screen.open{display:flex}
+.chat-placeholder{flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;padding:40px;text-align:center;color:var(--text2)}
+.chat-placeholder-icon{font-size:48px;opacity:.4;margin-bottom:16px}
+.coming-badge{background:rgba(255,110,180,.15);border:1px solid rgba(255,110,180,.3);
+  color:#ff6eb4;font-size:12px;font-weight:700;padding:6px 16px;
+  border-radius:20px;letter-spacing:.5px;margin-top:16px}
+
+/* ─── SETTINGS SCREEN ─── */
+#settings-screen{position:fixed;inset:0;background:var(--bg);z-index:20;
+  display:none;flex-direction:column}
+#settings-screen.open{display:flex;overflow-y:auto}
+.s-body{padding:16px}
+.s-group{margin-bottom:24px}
+.s-group-title{font-size:11px;text-transform:uppercase;letter-spacing:1px;
+  color:var(--text2);margin-bottom:10px}
+.s-row{background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.s-item{padding:14px 16px;display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border);cursor:pointer}
+.s-item:last-child{border-bottom:none}
+.s-label{font-size:14px}
+.s-sub{font-size:11px;color:var(--text2);margin-top:2px}
+.toggle{width:48px;height:28px;border-radius:14px;background:rgba(255,255,255,.1);
+  border:1px solid var(--border);position:relative;cursor:pointer;transition:background .3s}
+.toggle.on{background:var(--accent);border-color:var(--accent)}
+.toggle::after{content:'';position:absolute;width:20px;height:20px;border-radius:50%;
+  background:#fff;top:3px;left:3px;transition:left .3s;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.toggle.on::after{left:25px}
+.segment{display:flex;background:rgba(255,255,255,.07);border-radius:10px;padding:3px;gap:2px}
+.seg-opt{flex:1;padding:7px 10px;border-radius:8px;text-align:center;font-size:13px;
+  cursor:pointer;transition:all .2s;color:var(--text2);user-select:none;font-weight:500}
+.seg-opt.active{background:var(--accent);color:#fff;font-weight:700}
+
+@keyframes slideUp{from{transform:translateY(24px);opacity:0}to{transform:translateY(0);opacity:1}}
+
 </style>
+</head>
+<body>
+<div id="err"></div>
 </head>
 <body>
 
@@ -312,13 +526,13 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
       <span class="w-badge" id="w-map-badge">● LIVE</span>
     </div>
     <div class="w-row">
-      <div class="widget w-notes" onclick="alert('Note — presto!')">
+      <div class="widget w-notes" onclick="openNotes()">
         <div class="w-icon">📓</div>
         <div class="w-name">Note</div>
-        <div class="w-desc" id="w-notes-desc">Scrivi e organizza</div>
+        <div class="w-desc">Scrivi e organizza con tag</div>
         <span class="w-badge" id="w-notes-badge">0 note</span>
       </div>
-      <div class="widget w-chat">
+      <div class="widget w-chat" onclick="openChat()">
         <div class="w-icon">💬</div>
         <div class="w-name">Chat</div>
         <div class="w-desc">P2P · MetaMask</div>
@@ -326,7 +540,7 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
       </div>
     </div>
     <div class="w-row">
-      <div class="widget w-settings" onclick="alert('Impostazioni — presto!')">
+      <div class="widget w-settings" onclick="openSettings()">
         <div class="w-icon">⚙️</div>
         <div class="w-name">Impostazioni</div>
         <div class="w-desc">GPS · Lingua · Sicurezza</div>
@@ -354,8 +568,10 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
         <span style="font-family:'JetBrains Mono',monospace;font-size:12px">My Life · Mappa</span>
       </div>
       <div class="mact">
-        <div class="mibtn" onclick="showScreen('home-screen')">🏠</div>
+        <div class="mibtn" onclick="MAP.openPanel()">📋</div>
         <div class="mibtn" onclick="toggleFav()">⭐</div>
+        <div class="mibtn" onclick="document.getElementById('import-in').click()">📥</div>
+        <div class="mibtn" onclick="showScreen('home-screen')">🏠</div>
       </div>
     </div>
     <div id="map-status">Pronto</div>
@@ -381,834 +597,225 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
 <input type="file" id="gal-in" accept="image/*" style="display:none">
 <input type="file" id="import-in" accept=".json" multiple style="display:none" onchange="onImport(this)">
 
+<!-- MAP MODAL (preferiti) -->
+<div class="map-modal" id="fav-modal">
+  <div class="map-modal-inner">
+    <div class="mm-title">⭐ Nuovo luogo preferito</div>
+    <div class="mm-icons" id="mm-icons">
+      <div class="mm-icon sel" data-i="📍" onclick="MAP.selIcon(this)">📍</div>
+      <div class="mm-icon" data-i="🏠" onclick="MAP.selIcon(this)">🏠</div>
+      <div class="mm-icon" data-i="🏢" onclick="MAP.selIcon(this)">🏢</div>
+      <div class="mm-icon" data-i="🍕" onclick="MAP.selIcon(this)">🍕</div>
+      <div class="mm-icon" data-i="☕" onclick="MAP.selIcon(this)">☕</div>
+      <div class="mm-icon" data-i="🏖" onclick="MAP.selIcon(this)">🏖</div>
+      <div class="mm-icon" data-i="🏔" onclick="MAP.selIcon(this)">🏔</div>
+      <div class="mm-icon" data-i="🏥" onclick="MAP.selIcon(this)">🏥</div>
+      <div class="mm-icon" data-i="❤️" onclick="MAP.selIcon(this)">❤️</div>
+    </div>
+    <input class="mm-input" id="fav-name-in" placeholder="Nome del luogo..." maxlength="60">
+    <input class="mm-input" id="fav-note-in" placeholder="Nota (opzionale)..." maxlength="120">
+    <button class="btn" onclick="MAP.saveFav()">Salva</button>
+    <button class="btn-ghost" onclick="MAP.closeFavModal()">Annulla</button>
+  </div>
+</div>
+
+<!-- TRIPS/FAV PANEL -->
+<div class="side-panel" id="trips-panel">
+  <div class="sp-header">
+    <div class="sp-title">Esplora</div>
+    <button class="sp-close" onclick="MAP.closePanel()">✕</button>
+  </div>
+  <div class="sp-tabs">
+    <div class="sp-tab active" id="sptab-trips" onclick="MAP.switchTab('trips')">🗺 Viaggi</div>
+    <div class="sp-tab" id="sptab-favs" onclick="MAP.switchTab('favs')">⭐ Preferiti</div>
+  </div>
+  <div class="sp-body" id="trips-body"></div>
+</div>
+
+<!-- NOTES SCREEN -->
+<div id="notes-screen">
+  <div class="ns-header">
+    <button class="sp-close" onclick="showScreen('home-screen')">←</button>
+    <div class="ns-title">📓 Note</div>
+    <button class="sp-close" onclick="lockApp()">🔒</button>
+  </div>
+  <div class="ns-search-wrap">
+    <span class="ns-search-ico">🔍</span>
+    <input class="ns-search" id="notes-search" placeholder="Cerca..." oninput="NOTES.render()">
+  </div>
+  <div id="notes-tag-bar"></div>
+  <div class="ns-body"><div id="notes-grid"></div></div>
+</div>
+<button id="notes-fab" onclick="NOTES.openEditor(null)">＋</button>
+
+<!-- NOTE EDITOR -->
+<div id="note-editor">
+  <div class="ed-header">
+    <button id="ed-back" onclick="NOTES.closeEditor()">←</button>
+    <input id="ed-title" placeholder="Titolo...">
+    <div class="ed-actions">
+      <button class="ed-btn" id="ed-pin" onclick="NOTES.togglePin()">📌</button>
+      <button class="ed-btn" onclick="NOTES.toggleColorBar()">🎨</button>
+      <button class="ed-btn" onclick="NOTES.toggleTagBar()">🏷</button>
+      <button class="ed-btn" onclick="NOTES.deleteNote()" style="color:var(--red)">🗑</button>
+    </div>
+  </div>
+  <div id="color-bar">
+    <div class="cswatch sel" style="background:rgba(255,255,255,.15)" onclick="NOTES.setColor('default',this)"></div>
+    <div class="cswatch" style="background:#c0392b" onclick="NOTES.setColor('red',this)"></div>
+    <div class="cswatch" style="background:#e67e22" onclick="NOTES.setColor('orange',this)"></div>
+    <div class="cswatch" style="background:#f1c40f" onclick="NOTES.setColor('yellow',this)"></div>
+    <div class="cswatch" style="background:#27ae60" onclick="NOTES.setColor('green',this)"></div>
+    <div class="cswatch" style="background:#2980b9" onclick="NOTES.setColor('blue',this)"></div>
+    <div class="cswatch" style="background:#8e44ad" onclick="NOTES.setColor('purple',this)"></div>
+    <div class="cswatch" style="background:#e91e8c" onclick="NOTES.setColor('pink',this)"></div>
+  </div>
+  <div id="tag-bar-ed">
+    <div id="ed-current-tags"></div>
+    <input id="ed-tag-inp" placeholder="Aggiungi tag..." onkeydown="NOTES.onTagKey(event)">
+  </div>
+  <div class="ed-body">
+    <div id="ed-blocks"></div>
+    <textarea id="ed-text" placeholder="Inizia a scrivere..."></textarea>
+  </div>
+  <div class="ed-fabs">
+    <button class="ed-fab" onclick="NOTES.addImage()">📷 Immagine</button>
+    <button class="ed-fab" onclick="NOTES.addChecklist()">☑ Checklist</button>
+    <button class="ed-fab" onclick="NOTES.addDivider()">— Separatore</button>
+  </div>
+</div>
+<input type="file" id="note-img-in" accept="image/*" style="display:none" onchange="NOTES.onImgSelected(this)">
+
+<!-- CHAT SCREEN -->
+<div id="chat-screen">
+  <div class="sp-header">
+    <button class="sp-close" onclick="showScreen('home-screen')">←</button>
+    <div class="sp-title">💬 Chat</div>
+  </div>
+  <div class="chat-placeholder">
+    <div class="chat-placeholder-icon">💬</div>
+    <div style="font-size:18px;font-weight:700;color:var(--text);opacity:.6">Chat P2P</div>
+    <div style="font-size:13px;line-height:1.6;margin-top:8px">
+      Messaggi cifrati end-to-end · Gruppi privati · Pagamenti MetaMask
+    </div>
+    <div class="coming-badge">M1.3 — In sviluppo</div>
+  </div>
+</div>
+
+<!-- SETTINGS SCREEN -->
+<div id="settings-screen">
+  <div class="sp-header">
+    <button class="sp-close" onclick="showScreen('home-screen')">←</button>
+    <div class="sp-title">⚙️ Impostazioni</div>
+  </div>
+  <div class="s-body">
+    <div class="s-group">
+      <div class="s-group-title">GPS</div>
+      <div class="s-row">
+        <div class="s-item" onclick="MAP.toggleAuto()">
+          <div><div class="s-label">Registrazione automatica</div>
+            <div class="s-sub">Senza chiedere conferma</div></div>
+          <div class="toggle" id="tog-auto"></div>
+        </div>
+        <div class="s-item" style="cursor:default">
+          <div class="segment">
+            <div class="seg-opt" data-v="low" onclick="MAP.setSens('low')">Bassa</div>
+            <div class="seg-opt active" data-v="medium" onclick="MAP.setSens('medium')">Media</div>
+            <div class="seg-opt" data-v="high" onclick="MAP.setSens('high')">Alta</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="s-group">
+      <div class="s-group-title">Sicurezza</div>
+      <div class="s-row">
+        <div class="s-item" onclick="lockApp()">
+          <div class="s-label">Blocca app</div><span style="color:var(--accent)">🔒</span>
+        </div>
+      </div>
+    </div>
+    <div class="s-group">
+      <div class="s-group-title">Dati</div>
+      <div class="s-row">
+        <div class="s-item" onclick="SETTINGS.exportAll()">
+          <div class="s-label">Esporta tutto (JSON)</div><span style="color:var(--accent)">↓</span>
+        </div>
+        <div class="s-item" onclick="SETTINGS.clearAll()">
+          <div class="s-label" style="color:var(--red)">Cancella tutti i dati</div>
+          <span style="color:var(--red)">✕</span>
+        </div>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:20px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3)">
+      My Life v3.1 · AES-256-GCM
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══ MODULES — load order matters ═══ -->
 <script>
-// ══════════════════════════════════════════════════════
-// ERROR HANDLER
-// ══════════════════════════════════════════════════════
+// Global error handler
 function showErr(msg) {
   const b = document.getElementById('err');
-  b.style.display = 'block';
-  b.textContent = '⚠️ ' + msg;
+  if (b) { b.style.display='block'; b.textContent='⚠️ '+msg; }
   console.error('[ERR]', msg);
 }
 window.addEventListener('error', e => showErr(e.message + ' (' + (e.filename||'').split('/').pop() + ':' + e.lineno + ')'));
 window.addEventListener('unhandledrejection', e => showErr(String(e.reason?.message || e.reason)));
 
-// ══════════════════════════════════════════════════════
-// WORDLIST
-// ══════════════════════════════════════════════════════
-const WL = ['abandon','ability','able','about','above','absent','absorb','abstract','absurd','abuse','access','accident','account','accuse','achieve','acid','acoustic','acquire','across','act','action','actor','actress','actual','adapt','add','addict','address','adjust','admit','adult','advance','advice','aerobic','afford','afraid','again','age','agent','agree','ahead','aim','air','airport','aisle','alarm','album','alcohol','alert','alien','all','alley','allow','almost','alone','alpha','already','also','alter','always','amateur','amazing','among','amount','amused','analyst','anchor','ancient','anger','angle','angry','animal','ankle','announce','annual','another','answer','antenna','antique','anxiety','any','apart','apology','appear','apple','approve','april','arch','arctic','area','arena','argue','arm','armor','army','around','arrange','arrest','arrive','arrow','art','artefact','artist','artwork','ask','aspect','assault','asset','assist','assume','asthma','athlete','atom','attack','attend','attitude','attract','auction','audit','august','aunt','author','auto','autumn','average','avocado','avoid','awake','aware','away','awesome','awful','awkward','axis','baby','balance','bamboo','banana','banner','bar','barely','bargain','barrel','base','basic','basket','battle','beach','beauty','because','become','beef','before','begin','behave','behind','believe','below','belt','bench','benefit','best','betray','better','between','beyond','bicycle','bid','bike','bind','biology','bird','birth','bitter','black','blade','blame','blanket','blast','bleak','bless','blind','blood','blossom','blouse','blue','blur','blush','board','boat','body','boil','bomb','bone','book','boost','border','boring','borrow','boss','bottom','bounce','box','boy','bracket','brain','brand','brave','breeze','brick','bridge','brief','bright','bring','brisk','broccoli','broken','bronze','broom','brother','brown','brush','bubble','buddy','budget','buffalo','build','bulb','bulk','bullet','bundle','bunker','burden','burger','burst','bus','business','busy','butter','buyer'];
+// Helpers used by modules
+function esc(s) { return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtDate(ts) { return new Date(ts).toLocaleDateString('it-IT',{day:'numeric',month:'short'}); }
+</script>
+<script src="crypto.js?v=3.1"></script>
+<script src="auth.js?v=3.1"></script>
+<script src="db.js?v=3.1"></script>
+<script src="app.js?v=3.1"></script>
+<script src="map.js?v=3.1"></script>
+<script src="notes.js?v=3.1"></script>
+<script src="chat.js?v=3.1"></script>
+<script src="sync.js?v=3.1"></script>
+<script src="settings.js?v=3.1"></script>
 
-// ══════════════════════════════════════════════════════
-// CRYPTO — AES-256-GCM + SHA-256 per PIN check
-// NIENTE PBKDF2 — risolto il problema delle attese
-// La chiave è derivata con SHA-256 (istantaneo)
-// La sicurezza offline è garantita dalle 12 parole
-// (seed casuale a 32 byte = impossibile da bruteforce)
-// ══════════════════════════════════════════════════════
-const CR = {
-  _key: null, // chiave dati attiva
-
-  // Derive key from PIN + deviceId using SHA-256 (instant)
-  async pinToKey(pin, deviceId) {
-    const raw = new TextEncoder().encode('mylife:v3:' + pin + ':' + deviceId);
-    const hash = await crypto.subtle.digest('SHA-256', raw);
-    return crypto.subtle.importKey('raw', hash, {name:'AES-GCM'}, false, ['encrypt','decrypt']);
-  },
-
-  // Derive data key from seed using HKDF
-  async seedToDataKey(seed) {
-    const base = await crypto.subtle.importKey('raw', seed, 'HKDF', false, ['deriveKey']);
-    return crypto.subtle.deriveKey(
-      { name:'HKDF', hash:'SHA-256',
-        salt: new TextEncoder().encode('mylife:data:v3'),
-        info: new TextEncoder().encode('data_key') },
-      base, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']
-    );
-  },
-
-  // Encrypt any data
-  async enc(data, key) {
-    const k = key || this._key;
-    if (!k) throw new Error('no key');
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const raw = data instanceof Uint8Array ? data : new TextEncoder().encode(JSON.stringify(data));
-    const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv}, k, raw);
-    return { iv: h(iv), d: h(new Uint8Array(ct)) };
-  },
-
-  // Decrypt blob
-  async dec(blob, key) {
-    if (!blob || !blob.iv) return blob;
-    const k = key || this._key;
-    if (!k) throw new Error('no key');
-    const raw = await crypto.subtle.decrypt(
-      {name:'AES-GCM', iv: uh(blob.iv)}, k, uh(blob.d)
-    );
-    return raw;
-  },
-
-  // Encrypt app object
-  async encObj(obj) {
-    if (!this._key) throw new Error('locked');
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const ct = await crypto.subtle.encrypt(
-      {name:'AES-GCM', iv}, this._key,
-      new TextEncoder().encode(JSON.stringify(obj))
-    );
-    return {_ml:true, iv:h(iv), d:h(new Uint8Array(ct))};
-  },
-
-  // Decrypt app object
-  async decObj(blob) {
-    if (!blob || !blob._ml) return blob;
-    if (!this._key) throw new Error('locked');
-    const raw = await crypto.subtle.decrypt(
-      {name:'AES-GCM', iv:uh(blob.iv)}, this._key, uh(blob.d)
-    );
-    return JSON.parse(new TextDecoder().decode(raw));
-  },
-
-  // 12 words from seed
-  seedToWords(seed) {
-    return Array.from(seed).slice(0,12).map(b => WL[b % WL.length]);
-  },
-
-  // Seed from 12 words
-  wordsToSeed(words) {
-    if (!words || words.length !== 12) return null;
-    const clean = words.map(w => (w||'').toLowerCase().trim());
-    const idxs = clean.map(w => WL.indexOf(w));
-    if (idxs.some(i => i < 0)) return null;
-    const seed = new Uint8Array(32);
-    idxs.forEach((v,i) => { seed[i] = v % 256; });
-    for (let i = 12; i < 32; i++) seed[i] = (seed[i-12] ^ seed[i-6] ^ 0x5A) % 256;
-    return seed;
-  },
-
-  lock() { this._key = null; }
-};
-
-function h(b) { return Array.from(b).map(x=>x.toString(16).padStart(2,'0')).join(''); }
-function uh(s) { return new Uint8Array((s.match(/.{2}/g)||[]).map(b=>parseInt(b,16))); }
-
-// ══════════════════════════════════════════════════════
-// DEVICE ID — stabile, non usa user agent
-// ══════════════════════════════════════════════════════
-async function getDeviceId() {
-  let uuid = localStorage.getItem('ml_uuid');
-  if (!uuid) {
-    uuid = h(crypto.getRandomValues(new Uint8Array(16)));
-    localStorage.setItem('ml_uuid', uuid);
-  }
-  const traits = [uuid, screen.width, screen.height,
-    Intl.DateTimeFormat().resolvedOptions().timeZone,
-    navigator.language].join('|');
-  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(traits));
-  return h(new Uint8Array(hash));
+<!-- Navigation helpers -->
+<script>
+function openNotes() {
+  document.getElementById('notes-screen').classList.add('open');
+  document.getElementById('notes-fab').classList.add('visible');
+  NOTES.load().then(() => NOTES.render());
+}
+function openChat() {
+  document.getElementById('chat-screen').classList.add('open');
+}
+function openSettings() {
+  document.getElementById('settings-screen').classList.add('open');
 }
 
-// ══════════════════════════════════════════════════════
-// USER FILE — formato v3, non cambia mai
-// ══════════════════════════════════════════════════════
-const UF = {
-  KEY: 'ml_user_v3',
-
-  read() {
-    try {
-      const r = JSON.parse(localStorage.getItem(this.KEY) || 'null');
-      return (r && r.v === '3') ? r : null;
-    } catch { return null; }
-  },
-
-  write(data) {
-    localStorage.setItem(this.KEY, JSON.stringify(data));
-  },
-
-  exists() { return !!this.read(); },
-
-  async sameDevice() {
-    const u = this.read();
-    if (!u) return false;
-    return u.deviceId === await getDeviceId();
-  }
-};
-
-// ══════════════════════════════════════════════════════
-// INDEXEDDB
-// ══════════════════════════════════════════════════════
-let _db = null;
-async function initDB() {
-  if (_db) return;
-  _db = await new Promise((res,rej) => {
-    const r = indexedDB.open('MyLife', 1);
-    r.onupgradeneeded = e => {
-      ['trips','favorites','notes'].forEach(s => {
-        if (!e.target.result.objectStoreNames.contains(s))
-          e.target.result.createObjectStore(s, {keyPath:'id'});
-      });
-    };
-    r.onsuccess = e => res(e.target.result);
-    r.onerror = () => rej(r.error);
+// Back gesture
+window.addEventListener('popstate', () => {
+  ['notes-screen','chat-screen','settings-screen'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.classList.remove('open'); }
   });
-}
-async function dbAll(store) {
-  await initDB();
-  return new Promise(async (res,rej) => {
-    const r = _db.transaction(store,'readonly').objectStore(store).getAll();
-    r.onsuccess = async () => {
-      const out = [];
-      for (const row of r.result) {
-        try { out.push({...await CR.decObj(row.data||row), id:row.id}); }
-        catch { out.push(row); }
-      }
-      res(out);
-    };
-    r.onerror = () => rej(r.error);
-  });
-}
-async function dbPut(store, obj) {
-  await initDB();
-  const {id, ...data} = obj;
-  const enc = await CR.encObj(data);
-  return new Promise((res,rej) => {
-    const r = _db.transaction(store,'readwrite').objectStore(store).put({id:id||Date.now(), data:enc});
-    r.onsuccess = () => res();
-    r.onerror = () => rej(r.error);
-  });
-}
-async function dbDel(store, id) {
-  await initDB();
-  return new Promise((res,rej) => {
-    const r = _db.transaction(store,'readwrite').objectStore(store).delete(id);
-    r.onsuccess = () => res();
-    r.onerror = () => rej(r.error);
-  });
-}
-
-// ══════════════════════════════════════════════════════
-// STATE
-// ══════════════════════════════════════════════════════
-const S = {
-  lockPin:'', setupPin:'', confirmPin:'',
-  recovWords:[], verifyIdx:[],
-  recovMode:false, recovSeed:null,
-  tracking:false, trip:null, lastPos:null, pendPos:null,
-  watchId:null, timerInt:null, startTime:null, totalDist:0,
-  map:null, poly:null, markers:[], curMk:null, userMk:null,
-  favMode:false, pendFav:null, selIcon:'📍',
-  pendPhoto:null,
-};
-
-// ══════════════════════════════════════════════════════
-// NAVIGATION
-// ══════════════════════════════════════════════════════
-function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  if (id === 'map-screen' && !S.map) initMap();
-}
-
-function showStep(id) {
-  ['step-welcome','step-pin','step-confirm','step-phrase','step-verify']
-    .forEach(s => document.getElementById(s).style.display = 'none');
-  document.getElementById(id).style.display = 'flex';
-  // Costruisce la UI di verifica quando si arriva allo step
-  if (id === 'step-verify') buildVerifyUI();
-}
-
-// ══════════════════════════════════════════════════════
-// BOOT
-// ══════════════════════════════════════════════════════
-window.addEventListener('load', async () => {
-  try {
-    await initDB();
-
-    if (!UF.exists()) {
-      console.log('[boot] primo avvio');
-      showScreen('setup-screen');
-      showStep('step-welcome');
-      return;
-    }
-
-    const same = await UF.sameDevice();
-    if (!same) {
-      console.log('[boot] device diverso');
-      showScreen('recovery-screen');
-      buildRecovery('new-device');
-      return;
-    }
-
-    console.log('[boot] lock screen');
-    showScreen('lock-screen');
-
-  } catch(e) {
-    showErr('Boot error: ' + e.message);
-  }
-});
-
-// ══════════════════════════════════════════════════════
-// LOCK — PIN istantaneo (SHA-256, no PBKDF2)
-// ══════════════════════════════════════════════════════
-let _locking = false;
-
-async function lockKey(d) {
-  if (_locking || S.lockPin.length >= 6) return;
-  S.lockPin += d;
-  updDots('lock-dots', 'lock-dots', S.lockPin.length, false);
-
-  if (S.lockPin.length === 6) {
-    _locking = true;
-    document.getElementById('lock-sub').textContent = '🔓 Verifica...';
-    await tick();
-
-    try {
-      const u = UF.read();
-      if (!u) { showErr('Nessun utente'); _locking=false; return; }
-
-      const deviceId = await getDeviceId();
-      const pinKey   = await CR.pinToKey(S.lockPin, deviceId);
-
-      // Decifra il seed con la chiave PIN
-      const seedRaw = await CR.dec(u.encSeed, pinKey);
-      const seed    = new Uint8Array(seedRaw);
-
-      // Attiva chiave dati
-      CR._key = await CR.seedToDataKey(seed);
-
-      // Successo
-      setDots('lock-dots', 'ok');
-      await sleep(150);
-      _locking = false;
-      enterApp();
-
-    } catch(e) {
-      console.log('[lock] PIN errato:', e.message);
-      setDots('lock-dots', 'err');
-      document.getElementById('lock-sub').textContent = 'PIN errato. Riprova.';
-      if (navigator.vibrate) navigator.vibrate([80,40,80]);
-      await sleep(900);
-      S.lockPin = '';
-      _locking  = false;
-      updDots('lock-dots', 'lock-dots', 0, false);
-      document.getElementById('lock-sub').textContent = 'La tua privacy, sulla chain, per sempre';
-    }
-  }
-}
-
-function lockDel() {
-  if (_locking) return;
-  if (S.lockPin.length > 0) {
-    S.lockPin = S.lockPin.slice(0,-1);
-    updDots('lock-dots', 'lock-dots', S.lockPin.length, false);
-  }
-}
-
-// ══════════════════════════════════════════════════════
-// SETUP
-// ══════════════════════════════════════════════════════
-function setupKey(d) {
-  if (S.setupPin.length >= 6) return;
-  S.setupPin += d;
-  updDots('setup-dots', 'setup', S.setupPin.length, false);
-  if (S.setupPin.length === 6) setTimeout(() => showStep('step-confirm'), 200);
-}
-function setupDel() {
-  S.setupPin = S.setupPin.slice(0,-1);
-  updDots('setup-dots', 'setup', S.setupPin.length, false);
-}
-
-let _confirming = false;
-async function confirmKey(d) {
-  if (_confirming || S.confirmPin.length >= 6) return;
-  S.confirmPin += d;
-  updDots('confirm-dots', 'confirm', S.confirmPin.length, false);
-
-  if (S.confirmPin.length === 6) {
-    if (S.confirmPin !== S.setupPin) {
-      setDots('confirm-dots', 'err');
-      await sleep(800);
-      S.confirmPin = '';
-      updDots('confirm-dots', 'confirm', 0, false);
-      return;
-    }
-
-    _confirming = true;
-    const sub = document.getElementById('confirm-sub');
-    if (sub) sub.textContent = '⚙️ Configurazione...';
-    await tick();
-
-    try {
-      if (S.recovMode) {
-        // Migrazione: riconfigura utente su questo device
-        const deviceId = await getDeviceId();
-        const pinKey   = await CR.pinToKey(S.setupPin, deviceId);
-        const encSeed  = await CR.enc(S.recovSeed, pinKey);
-        const existing = UF.read();
-
-        UF.write({
-          v: '3',
-          userId:    existing?.userId || h(crypto.getRandomValues(new Uint8Array(16))),
-          deviceId,
-          created:   existing?.created || today(),
-          migratedAt: today(),
-          encSeed,
-          backupVerified: true,
-        });
-
-        CR._key     = await CR.seedToDataKey(S.recovSeed);
-        S.recovMode = false;
-        S.recovSeed = null;
-        _confirming = false;
-        enterApp();
-
-      } else {
-        // Primo avvio: crea utente
-        const seed     = crypto.getRandomValues(new Uint8Array(32));
-        const words    = CR.seedToWords(seed);
-        const deviceId = await getDeviceId();
-        const pinKey   = await CR.pinToKey(S.setupPin, deviceId);
-        const encSeed  = await CR.enc(seed, pinKey);
-
-        UF.write({
-          v: '3',
-          userId:   h(crypto.getRandomValues(new Uint8Array(16))),
-          deviceId,
-          created:  today(),
-          encSeed,
-          backupVerified: false,
-        });
-
-        CR._key      = await CR.seedToDataKey(seed);
-        S.recovWords = words;
-        _confirming  = false;
-
-        // Mostra 12 parole
-        document.getElementById('phrase-grid').innerHTML =
-          words.map((w,i) =>
-            `<div class="phrase-word">
-              <span class="pnum">${String(i+1).padStart(2,'0')}</span>
-              <span class="pword">${w}</span>
-            </div>`
-          ).join('');
-        showStep('step-phrase');
-      }
-
-    } catch(e) {
-      _confirming = false;
-      showErr('Setup error: ' + e.message);
-    }
-  }
-}
-function confirmDel() {
-  if (_confirming) return;
-  S.confirmPin = S.confirmPin.slice(0,-1);
-  updDots('confirm-dots', 'confirm', S.confirmPin.length, false);
-}
-
-function buildVerifyUI() {
-  S.verifyIdx = [];
-  while (S.verifyIdx.length < 4) {
-    const n = Math.floor(Math.random()*12);
-    if (!S.verifyIdx.includes(n)) S.verifyIdx.push(n);
-  }
-  S.verifyIdx.sort((a,b)=>a-b);
-  document.getElementById('verify-grid').innerHTML = S.verifyIdx.map(i =>
-    `<div class="rrow">
-      <span class="rnum">#${i+1}</span>
-      <input class="rinput" data-i="${i}" placeholder="parola ${i+1}..."
-        autocomplete="off" autocorrect="off" spellcheck="false" oninput="chkVerify()">
-    </div>`
-  ).join('');
-}
-
-function chkVerify() {
-  let ok = true;
-  document.querySelectorAll('#verify-grid .rinput').forEach(inp => {
-    const v = inp.value.trim().toLowerCase();
-    if (!v) { inp.className='rinput'; ok=false; }
-    else if (v === S.recovWords[+inp.dataset.i]) inp.className='rinput ok';
-    else { inp.className='rinput err'; ok=false; }
-  });
-  document.getElementById('verify-btn').disabled = !ok;
-}
-
-async function finishSetup() {
-  try {
-    const u = UF.read();
-    if (u) { u.backupVerified = true; UF.write(u); }
-    await enterApp();
-  } catch(e) {
-    showErr('finishSetup error: ' + e.message);
-  }
-}
-
-// ══════════════════════════════════════════════════════
-// RECOVERY
-// ══════════════════════════════════════════════════════
-function buildRecovery(mode) {
-  const t = document.getElementById('rec-title');
-  const s = document.getElementById('rec-sub');
-  if (mode === 'new-device') {
-    if (t) t.textContent = '📱 Nuovo dispositivo';
-    if (s) s.textContent = 'Inserisci le 12 parole per trasferire il tuo account su questo telefono.';
-  } else {
-    if (t) t.textContent = '🔑 Recupero accesso';
-    if (s) s.textContent = 'Inserisci le 12 parole di backup.';
-  }
-  document.getElementById('rec-err').textContent = '';
-  document.getElementById('rec-grid').innerHTML =
-    Array.from({length:12},(_,i) =>
-      `<div class="rrow">
-        <span class="rnum">#${i+1}</span>
-        <input class="rinput" id="rw${i}" placeholder="parola ${i+1}..."
-          autocomplete="off" autocorrect="off" spellcheck="false"
-          style="text-transform:lowercase">
-      </div>`
-    ).join('');
-}
-
-async function doRecovery() {
-  const words = Array.from({length:12},(_,i)=>{
-    const el = document.getElementById('rw'+i);
-    return el ? el.value.trim().toLowerCase() : '';
-  });
-
-  const e = document.getElementById('rec-err');
-  e.style.color = 'var(--text2)';
-  e.textContent = '🔍 Verifica parole...';
-
-  const seed = CR.wordsToSeed(words);
-  if (!seed) {
-    e.style.color = 'var(--red)';
-    e.textContent = '❌ Parole non corrette. Controlla e riprova.';
+  const ed = document.getElementById('note-editor');
+  if (ed && ed.classList.contains('open')) {
+    NOTES.closeEditor();
     return;
   }
-
-  // Parole corrette — vai a impostare nuovo PIN
-  S.recovSeed = seed;
-  S.recovMode = true;
-  S.setupPin  = '';
-  S.confirmPin = '';
-  showScreen('setup-screen');
-  showStep('step-pin');
-  document.getElementById('pin-sub').textContent = 'Scegli un nuovo PIN per questo dispositivo.';
-}
-
-// ══════════════════════════════════════════════════════
-// APP
-// ══════════════════════════════════════════════════════
-async function enterApp() {
-  updateHomeTime();
-  setInterval(updateHomeTime, 30000);
-  try {
-    const notes = await dbAll('notes');
-    document.getElementById('w-notes-badge').textContent = notes.length + ' note';
-  } catch {}
-  showScreen('home-screen');
-}
-
-function updateHomeTime() {
-  const el = document.getElementById('home-time');
-  if (!el) return;
-  const now = new Date();
-  el.textContent =
-    now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}) + ' · ' +
-    now.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'});
-}
-
-function lockApp() {
-  CR.lock();
-  if (S.tracking) stopTrip();
-  S.lockPin = '';
-  showScreen('lock-screen');
-  updDots('lock-dots','lock-dots',0,false);
-  document.getElementById('lock-sub').textContent = 'La tua privacy, sulla chain, per sempre';
-}
-
-function confirmReset() {
-  if (!confirm(
-    'ATTENZIONE\n\n' +
-    'Questa operazione cancella TUTTI i dati:\n' +
-    '- Viaggi, note, preferiti\n' +
-    '- Account e PIN\n\n' +
-    'Usare SOLO se hai perso le 12 parole.\n\n' +
-    'Sei sicuro?'
-  )) return;
-  localStorage.clear();
-  indexedDB.deleteDatabase('MyLife');
-  location.reload();
-}
-
-// ══════════════════════════════════════════════════════
-// MAP
-// ══════════════════════════════════════════════════════
-function openMap() {
-  showScreen('map-screen');
-  if (!S.map) initMap();
-}
-
-function initMap() {
-  S.map  = L.map('map',{zoomControl:false,attributionControl:false}).setView([45.46,9.19],13);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(S.map);
-  S.poly = L.polyline([],{color:'#6c8eff',weight:4,opacity:.85}).addTo(S.map);
-  S.map.on('click', e => { if (S.favMode) openFavModal(e.latlng); });
-  renderFavMarkers();
-}
-
-function locateMe() {
-  if (!navigator.geolocation) { showErr('GPS non disponibile'); return; }
-  const btn = document.getElementById('locate-btn');
-  btn.textContent = '⌛';
-  navigator.geolocation.getCurrentPosition(pos => {
-    const {latitude:lat, longitude:lng, accuracy:acc} = pos.coords;
-    if (S.userMk) S.map.removeLayer(S.userMk);
-    S.userMk = L.marker([lat,lng],{icon:L.divIcon({
-      html:'<div class="userdot"></div>',iconSize:[16,16],iconAnchor:[8,8],className:''
-    })}).addTo(S.map).bindPopup(`<div class="pop-t">📍 Sei qui</div><div class="pop-s">±${Math.round(acc)}m</div>`);
-    S.map.flyTo([lat,lng], Math.max(S.map.getZoom(),16), {duration:1.2});
-    btn.textContent = '📍';
-    setMapStatus(`±${Math.round(acc)}m`, 'active');
-    setTimeout(() => { if (!S.tracking) setMapStatus('Pronto',''); btn.textContent='📍'; }, 3000);
-  }, () => { btn.textContent='📍'; showErr('GPS non disponibile'); }, {enableHighAccuracy:true,timeout:10000});
-}
-
-function toggleTrip() { S.tracking ? stopTrip() : startTrip(); }
-
-function startTrip() {
-  if (!navigator.geolocation) { showErr('GPS non disponibile'); return; }
-  S.tracking = true;
-  S.trip     = {id:Date.now(), points:[], startTime:Date.now()};
-  S.lastPos  = null; S.totalDist = 0; S.startTime = Date.now();
-  S.poly.setLatLngs([]); S.markers.forEach(m=>S.map.removeLayer(m)); S.markers=[];
-  setMapStatus('Ricerca GPS...','wait');
-  document.getElementById('mdot').className = 'mdot rec';
-  document.getElementById('trip-stats').className = 'show';
-  document.getElementById('main-btn').className = 'rec';
-  document.getElementById('btn-icon').textContent = '■';
-  document.getElementById('btn-label').textContent = 'Ferma';
-  S.timerInt = setInterval(updTimer,1000);
-  S.watchId  = navigator.geolocation.watchPosition(onPos, ()=>setMapStatus('GPS non disponibile','wait'),
-    {enableHighAccuracy:true,maximumAge:5000,timeout:15000});
-}
-
-async function stopTrip() {
-  if (S.watchId !== null) navigator.geolocation.clearWatch(S.watchId);
-  clearInterval(S.timerInt); S.tracking = false;
-  setMapStatus('Pronto','');
-  document.getElementById('mdot').className = 'mdot';
-  document.getElementById('trip-stats').className = '';
-  document.getElementById('main-btn').className = '';
-  document.getElementById('btn-icon').textContent = '▶';
-  document.getElementById('btn-label').textContent = 'Inizia viaggio';
-  document.getElementById('gps-acc').textContent = '';
-  if (S.trip && S.trip.points.length > 0) {
-    S.trip.endTime = Date.now();
-    try { await dbPut('trips', S.trip); } catch(e) { console.error(e); }
+  const tp = document.getElementById('trips-panel');
+  if (tp && tp.classList.contains('open')) {
+    MAP.closePanel();
+    return;
   }
-  S.trip = null;
-}
-
-function onPos(pos) {
-  const {latitude:lat, longitude:lng, accuracy:acc} = pos.coords;
-  document.getElementById('gps-acc').textContent = `±${Math.round(acc)}m`;
-  if (S.curMk) S.map.removeLayer(S.curMk);
-  S.curMk = L.circleMarker([lat,lng],{radius:8,fillColor:'#6c8eff',color:'#fff',weight:2,fillOpacity:1}).addTo(S.map);
-  if (S.map.getZoom()<15) S.map.setView([lat,lng],16); else S.map.panTo([lat,lng]);
-  setMapStatus('Registrazione','active');
-  if (!S.lastPos) { savePoint(lat,lng,acc); return; }
-  const dist = hav(S.lastPos.lat,S.lastPos.lng,lat,lng);
-  if (dist >= 50) { S.lastPos={lat,lng}; savePoint(lat,lng,acc); }
-}
-
-function savePoint(lat,lng,acc) {
-  const pt = {lat,lng,acc,ts:Date.now()};
-  S.trip.points.push(pt);
-  if (S.lastPos) S.totalDist += hav(S.lastPos.lat,S.lastPos.lng,lat,lng);
-  S.lastPos = {lat,lng};
-  S.poly.setLatLngs(S.trip.points.map(p=>[p.lat,p.lng]));
-  const i = S.trip.points.length-1;
-  const cls = i===0?' first':(i===S.trip.points.length-1?' last':'');
-  const icon = L.divIcon({html:`<div class="gs-dot${cls}"></div>`,iconSize:[12,12],iconAnchor:[6,6],className:''});
-  S.markers.push(L.marker([lat,lng],{icon}).addTo(S.map)
-    .bindPopup(`<div class="pop-t">${new Date(pt.ts).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}</div><div class="pop-s">${lat.toFixed(5)}, ${lng.toFixed(5)}</div>`));
-  updStats();
-}
-
-function updStats() {
-  document.getElementById('s-pts').textContent = S.trip ? S.trip.points.length : 0;
-  const d = S.totalDist;
-  document.getElementById('s-dist').textContent = d>=1000?`${(d/1000).toFixed(1)}km`:`${Math.round(d)}m`;
-}
-function updTimer() {
-  const s = Math.floor((Date.now()-S.startTime)/1000);
-  document.getElementById('s-time').textContent =
-    `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
-}
-function setMapStatus(msg,cls) {
-  const el = document.getElementById('map-status');
-  el.textContent=msg; el.className=cls||'';
-}
-
-function toggleFav() {
-  S.favMode = !S.favMode;
-  document.querySelector('.mibtn:nth-child(2)').style.background =
-    S.favMode ? 'rgba(245,200,66,.2)' : '';
-  document.querySelector('.mibtn:nth-child(2)').textContent =
-    S.favMode ? '✕' : '⭐';
-  const hint = document.getElementById('fav-hint');
-  if (hint) hint.style.display = S.favMode ? 'block' : 'none';
-}
-
-function openFavModal(latlng) {
-  S.pendFav = latlng;
-  // Simple prompt-based modal for now
-  const name = prompt('Nome del luogo:');
-  if (!name || !name.trim()) { toggleFav(); return; }
-  const icons = ['📍','🏠','🏢','🍕','☕','🏖','🏔','❤️','🏥','⛽'];
-  const iconChoice = prompt('Scegli icona (0-9):\n' +
-    icons.map((ic,i) => i+': '+ic).join('  '), '0');
-  const icon = icons[parseInt(iconChoice)||0] || '📍';
-  const note = prompt('Nota (opzionale):') || '';
-  saveFavoriteAt(latlng.lat, latlng.lng, name.trim(), note.trim(), icon);
-  toggleFav();
-}
-
-async function saveFavoriteAt(lat, lng, name, note, icon) {
-  try {
-    const fav = { id:Date.now(), lat, lng, name, note, icon, ts:Date.now() };
-    await dbPut('favorites', fav);
-    // Add marker immediately
-    const mkIcon = L.divIcon({
-      html:`<div class="fav-mk">${icon}</div>`,
-      iconSize:[30,30], iconAnchor:[15,15], className:''
-    });
-    L.marker([lat,lng],{icon:mkIcon}).addTo(S.map)
-      .bindPopup(`<div class="pop-t">${name}</div>${note?`<div class="pop-s">${note}</div>`:''}`);
-  } catch(e) { showErr('Errore salvataggio: ' + e.message); }
-}
-async function renderFavMarkers() {
-  try {
-    const favs = await dbAll('favorites');
-    favs.forEach(f => {
-      if (!f.lat) return;
-      const icon = L.divIcon({html:`<div class="fav-mk">${f.icon||'📍'}</div>`,iconSize:[30,30],iconAnchor:[15,15],className:''});
-      L.marker([f.lat,f.lng],{icon}).addTo(S.map)
-        .bindPopup(`<div class="pop-t">${f.name||'Preferito'}</div>`);
-    });
-  } catch {}
-}
-
-// ══════════════════════════════════════════════════════
-// GOOGLE IMPORT
-// ══════════════════════════════════════════════════════
-async function onImport(inp) {
-  const files = Array.from(inp.files);
-  let count = 0;
-  for (const file of files) {
-    try {
-      const json = JSON.parse(await file.text());
-      if (!json.features) continue;
-      for (const f of json.features) {
-        const [lng,lat] = f.geometry?.coordinates || [0,0];
-        if (!lng && !lat) continue;
-        const p = f.properties || {};
-        const name = p.location?.name || p.name || 'Luogo Google Maps';
-        await dbPut('favorites', {
-          id: Date.now()+Math.random(),
-          lat, lng,
-          name: String(name).substring(0,60),
-          note: String(p.location?.address || p.address || '').substring(0,120),
-          icon: '📍', ts: Date.now(),
-          source: 'google'
-        });
-        count++;
-      }
-    } catch(e) { console.error('import error:', e); }
+  const fm = document.getElementById('fav-modal');
+  if (fm && fm.classList.contains('open')) {
+    MAP.closeFavModal();
+    return;
   }
-  if (S.map) renderFavMarkers();
-  alert(`Importati ${count} luoghi`);
-  inp.value = '';
-}
-
-// ══════════════════════════════════════════════════════
-// PIN PAD TOUCH HANDLER
-// ══════════════════════════════════════════════════════
-const KEY_FNS = {
-  lockKey, lockDel,
-  setupKey, setupDel,
-  confirmKey, confirmDel
-};
-
-// Mappa dots prefix
-function dotPfx(id) {
-  if (id === 'lock-dots') return 'd';
-  if (id === 'setup-dots') return 's';
-  if (id === 'confirm-dots') return 'c';
-  return 'd';
-}
-
-function updDots(dotId, _, n, err) {
-  const pfx = dotPfx(dotId);
-  for (let i=0; i<6; i++) {
-    const el = document.getElementById(pfx+i);
-    if (!el) continue;
-    el.className = 'dot' + (err?' err': i<n?' on':'');
-  }
-}
-
-function setDots(dotId, state) {
-  const pfx = dotPfx(dotId);
-  for (let i=0; i<6; i++) {
-    const el = document.getElementById(pfx+i);
-    if (el) el.className = 'dot ' + state;
-  }
-}
-
-let _lastTouch = 0;
-document.addEventListener('touchstart', e => {
-  const key = e.target.closest('.key');
-  if (!key || key.classList.contains('empty')) return;
-  e.preventDefault();
-  _lastTouch = Date.now();
-  key.classList.add('pressed');
-  setTimeout(()=>key.classList.remove('pressed'), 150);
-  if (navigator.vibrate) navigator.vibrate(8);
-  const fn = key.dataset.fn;
-  const v  = key.dataset.v;
-  if (fn && KEY_FNS[fn]) v ? KEY_FNS[fn](v) : KEY_FNS[fn]();
-}, {passive:false});
-
-document.addEventListener('click', e => {
-  if (Date.now() - _lastTouch < 500) return; // evita doppio su mobile
-  const key = e.target.closest('.key');
-  if (!key || key.classList.contains('empty')) return;
-  const fn = key.dataset.fn;
-  const v  = key.dataset.v;
-  if (fn && KEY_FNS[fn]) v ? KEY_FNS[fn](v) : KEY_FNS[fn]();
-});
-
-// Intercept back gesture
-window.addEventListener('popstate', () => {
-  const active = document.querySelector('.screen.active');
-  if (active && active.id !== 'home-screen' && active.id !== 'lock-screen') {
-    history.pushState({}, '');
-    if (active.id === 'map-screen') showScreen('home-screen');
-  }
+  document.getElementById('notes-fab')?.classList.remove('visible');
 });
 window.history.pushState({}, '');
-
-// ══════════════════════════════════════════════════════
-// UTILS
-// ══════════════════════════════════════════════════════
-function hav(a,b,c,d) {
-  const R=6371000,da=(c-a)*Math.PI/180,db=(d-b)*Math.PI/180;
-  const x=Math.sin(da/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(db/2)**2;
-  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
-}
-function today() { return new Date().toISOString().split('T')[0]; }
-function tick() { return new Promise(r => setTimeout(r, 30)); }
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 </script>
 </body>
 </html>
