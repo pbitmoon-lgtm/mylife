@@ -747,10 +747,8 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);
     <div class="pin-key" data-fn="pinDel">⌫</div>
   </div>
   <div class="lock-footer">
-    <span class="lock-link" onclick="showRecovery()">Hai dimenticato il PIN?</span>
-    <br><br>
-    <span class="lock-link" style="font-size:11px;color:var(--text3)" onclick="resetAppData()">
-      Problemi di accesso? Ricomincia da zero
+    <span class="lock-link" onclick="showRecovery()">
+      Non ricordo il PIN — usa le 12 parole
     </span>
   </div>
 </div>
@@ -833,11 +831,16 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);
   <div style="width:100%;max-width:340px">
     <button onclick="navTo('lock-screen')" style="background:none;border:none;color:var(--text2);font-size:14px;cursor:pointer;margin-bottom:28px;font-family:'Sora',sans-serif">← Torna</button>
     <div style="font-size:44px;margin-bottom:16px">🔑</div>
-    <div style="font-size:22px;font-weight:800;margin-bottom:8px;letter-spacing:-.3px">Recupero accesso</div>
-    <div style="font-size:14px;color:var(--text2);margin-bottom:24px;line-height:1.6">Inserisci le 12 parole nella sequenza corretta.</div>
+    <div id="rec-title" style="font-size:22px;font-weight:800;margin-bottom:8px;letter-spacing:-.3px">Recupero accesso</div>
+    <div id="rec-sub-text" style="font-size:14px;color:var(--text2);margin-bottom:24px;line-height:1.6">Inserisci le 12 parole nella sequenza corretta.</div>
     <div class="recovery-grid" id="recovery-grid"></div>
-    <button class="wizard-btn" onclick="doRecovery()">Recupera accesso</button>
-    <div id="rec-err" style="color:var(--red);font-size:12px;text-align:center;margin-top:10px"></div>
+    <button class="wizard-btn" onclick="doRecovery()">Continua →</button>
+    <div id="rec-err" style="font-size:12px;text-align:center;margin-top:10px"></div>
+    <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--border);text-align:center">
+      <span style="font-size:11px;color:var(--text3);cursor:pointer" onclick="resetAppData()">
+        Cancella tutto e ricomincia da zero
+      </span>
+    </div>
   </div>
 </div>
 
@@ -1190,13 +1193,13 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);
      6. chat.js    — chat placeholder (M1.3)
      7. settings.js — impostazioni (dipende da db)
 ══════════════════════════════════════════════ -->
-<script src="crypto.js"></script>
-<script src="db.js"></script>
-<script src="app.js"></script>
-<script src="map.js"></script>
-<script src="notes.js"></script>
-<script src="chat.js"></script>
-<script src="settings.js"></script>
+<script src="crypto.js?v=device1"></script>
+<script src="db.js?v=device1"></script>
+<script src="app.js?v=device1"></script>
+<script src="map.js?v=device1"></script>
+<script src="notes.js?v=device1"></script>
+<script src="chat.js?v=device1"></script>
+<script src="settings.js?v=device1"></script>
 
 </body>
 </html>
