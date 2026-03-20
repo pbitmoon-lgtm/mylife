@@ -251,38 +251,88 @@ const StorageManager = (() => {
     }
   });
 
-  // 9. Ripristino vault da backup fisico
+  // 9. Ripristino vault da backup fisico — Coda Sequenziale
+  // NON lanciare tutti gli eventi in parallelo:
+  // 100 asset da 3MB ciascuno = 300MB in RAM simultanei → OOM crash.
+  // La coda processa UN asset alla volta:
+  // cifra → ASSET_COMMITTED → prossimo asset → RAM sempre piatta.
   State.subscribe('INTENT_RESTORE_VAULT', async ({ records, assets }) => {
     try {
-      // Prima svuota gli store esistenti
+      // Svuota gli store esistenti
       await clear('core_records');
       await clear('media_assets');
 
-      // Re-cifra e riscrivi ogni record con la chiave del device corrente
+      const total = records.length + assets.length;
+      let done    = 0;
+
+      // ── Tier 1: record testo — leggeri, processabili in batch ──
       for (const record of records) {
         State.dispatch('INTENT_SAVE_RECORD', {
           recordId:    record.id,
           type:        record.type,
           textPayload: record,
         });
+        done++;
+        State.dispatch('RESTORE_PROGRESS', {
+          step:     'records',
+          progress: done / total,
+          done,
+          total,
+        });
+        // Cede il controllo al browser ogni 10 record per non bloccare la UI
+        if (done % 10 === 0) await new Promise(r => setTimeout(r, 0));
       }
 
-      // Riscrivi gli asset
+      // ── Tier 2: asset binari — UNO ALLA VOLTA per tenere la RAM piatta ──
       for (const asset of assets) {
-        if (asset.data) {
+        if (!asset.data) { done++; continue; }
+
+        // Attende ASSET_COMMITTED prima di processare il prossimo
+        // Questo garantisce che la RAM venga liberata tra un asset e l'altro
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            unsubOk(); unsubErr();
+            reject(new Error(`Timeout cifratura asset ${asset.id}`));
+          }, 30000); // 30s per asset — sufficiente anche per video grandi
+
+          const unsubOk = State.subscribe('ASSET_COMMITTED', ({ id }) => {
+            if (id !== asset.id) return; // non è il nostro asset
+            clearTimeout(timeout);
+            unsubOk(); unsubErr();
+            resolve();
+          });
+
+          const unsubErr = State.subscribe('STORAGE_WRITE_ERROR', ({ id }) => {
+            if (id !== asset.id) return;
+            clearTimeout(timeout);
+            unsubOk(); unsubErr();
+            reject(new Error(`Errore scrittura asset ${asset.id}`));
+          });
+
+          // Lancia la cifratura di questo singolo asset
           State.dispatch('REQUEST_ENCRYPT', {
             id:      asset.id,
             payload: asset.data,
             isAsset: true,
           });
-        }
+        });
+
+        done++;
+        State.dispatch('RESTORE_PROGRESS', {
+          step:     'assets',
+          progress: done / total,
+          done,
+          total,
+        });
       }
 
       State.dispatch('BACKUP_RESTORED', {
         recordCount: records.length,
         assetCount:  assets.length,
       });
+
     } catch (err) {
+      console.error('[db] restore error:', err);
       State.dispatch('RESTORE_ERROR', { error: 'Ripristino DB fallito: ' + err.message });
     }
   });

@@ -442,10 +442,62 @@ document.addEventListener('click', e => {
     case 'INTENT_DO_RECOVERY':
       doRecovery();
       break;
+
+    // ── Backup — legge i valori dal DOM, mai esposti al window ──
+    case 'INTENT_CREATE_BACKUP': {
+      const pwd  = document.getElementById('backup-pwd')?.value || '';
+      const pwd2 = document.getElementById('backup-pwd2')?.value || '';
+      const err  = document.getElementById('backup-err');
+      if (pwd.length < 8) { if (err) err.textContent = 'Password troppo corta (minimo 8 caratteri)'; break; }
+      if (pwd !== pwd2)   { if (err) err.textContent = 'Le password non corrispondono'; break; }
+      if (err) err.textContent = '';
+      document.getElementById('backup-progress')?.style.setProperty('display','block');
+      State.dispatch('INTENT_CREATE_BACKUP', { password: pwd });
+      break;
+    }
+    case 'INTENT_RESTORE_BACKUP': {
+      const pwd = document.getElementById('restore-pwd')?.value || '';
+      const err = document.getElementById('restore-err');
+      if (!window._restoreFileBuffer) { if (err) err.textContent = 'Seleziona un file .enc'; break; }
+      if (!pwd) { if (err) err.textContent = 'Inserisci la password di backup'; break; }
+      if (!confirm('Ripristinare il backup? I dati correnti verranno sovrascritti.')) break;
+      if (err) err.textContent = '';
+      document.getElementById('restore-progress')?.style.setProperty('display','block');
+      State.dispatch('INTENT_RESTORE_BACKUP', { fileBuffer: window._restoreFileBuffer, password: pwd });
+      // _restoreFileBuffer è solo un ArrayBuffer — non è State, non è pericoloso
+      break;
+    }
+
     default:
       // Intent non gestito da boot — potrebbe essere gestito da altri moduli
       State.dispatch(intent, payload);
   }
+});
+
+// Ascolta completamento backup per aggiornare la UI
+State.subscribe('BACKUP_COMPLETE', ({ filename, sizeKB }) => {
+  document.getElementById('backup-progress')?.style.setProperty('display','none');
+  const btn = document.querySelector('#backup-panel .btn');
+  if (btn) btn.disabled = false;
+  document.getElementById('backup-panel')?.classList.remove('open');
+  alert(`✅ Backup creato: ${filename} (${sizeKB} KB)`);
+});
+State.subscribe('BACKUP_ERROR', ({ error }) => {
+  document.getElementById('backup-progress')?.style.setProperty('display','none');
+  const btn = document.querySelector('#backup-panel .btn');
+  if (btn) btn.disabled = false;
+  const err = document.getElementById('backup-err');
+  if (err) err.textContent = '❌ ' + error;
+});
+State.subscribe('BACKUP_RESTORED', ({ recordCount }) => {
+  document.getElementById('restore-progress')?.style.setProperty('display','none');
+  document.getElementById('restore-panel')?.classList.remove('open');
+  alert(`✅ Ripristino completato: ${recordCount} record`);
+});
+State.subscribe('RESTORE_ERROR', ({ error }) => {
+  document.getElementById('restore-progress')?.style.setProperty('display','none');
+  const err = document.getElementById('restore-err');
+  if (err) err.textContent = '❌ ' + error;
 });
 
 // ─── ZK WORKER — SINGLETON ───────────────────────────
@@ -542,10 +594,6 @@ State.subscribe('APP_READY', () => {
     _deadLetterQueue.length = 0;
   }
 });
-
-// Espone State per gli helper JS nell'HTML (backup panel)
-// Solo State — nessuna funzione di business
-window.__State = State;
 
 // ─── AVVIO ────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', boot);
