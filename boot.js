@@ -479,13 +479,66 @@ State.subscribe('APP_READY', () => {
   }
 });
 
-// Termina il worker quando la sessione viene bloccata
-// Libera CPU e memoria immediatamente
+// ─── ZK WORKER — GRACEFUL SHUTDOWN ──────────────────
+// Quando la sessione si blocca, NON usiamo .terminate() diretto.
+// .terminate() è una ghigliottina — uccide il thread istantaneamente
+// senza permettergli di finire. Se il worker stava eseguendo un
+// calcolo ZKP per una transazione economica, quella transazione
+// verrebbe abbandonata silenziosamente senza mai tornare un errore.
+// L'Orchestratore resterebbe in attesa indefinita → Dangling State.
+//
+// Protocollo Graceful Shutdown:
+//   1. boot.js invia INTENT_SHUTDOWN al worker
+//   2. worker scarta il calcolo in corso e risponde SHUTDOWN_ACK
+//   3. boot.js riceve ACK → mette il job nella Dead Letter Queue
+//   4. solo ora chiama .terminate() in sicurezza
+//
+const _deadLetterQueue = []; // job ZK interrotti → riprova al prossimo unlock
+const SHUTDOWN_TIMEOUT_MS = 3000; // se il worker non risponde entro 3s → terminate forzato
+
 State.subscribe('CRYPTO_LOCKED', () => {
-  if (_zkWorker) {
+  if (!_zkWorker) return;
+
+  console.log('[boot] inizio graceful shutdown ZK worker...');
+
+  // Timeout di sicurezza: se il worker non risponde entro 3s,
+  // forziamo terminate per non tenere thread zombie
+  const forceKill = setTimeout(() => {
+    console.warn('[boot] ZK worker non ha risposto — terminate forzato');
+    if (_zkWorker) { _zkWorker.terminate(); _zkWorker = null; }
+  }, SHUTDOWN_TIMEOUT_MS);
+
+  // Ascolta l'ACK di shutdown una sola volta
+  const onShutdownAck = e => {
+    if (e.data?.type !== 'SHUTDOWN_ACK') return;
+
+    clearTimeout(forceKill);
+    _zkWorker.removeEventListener('message', onShutdownAck);
+
+    // Metti i job interrotti nella Dead Letter Queue
+    const pendingJobs = e.data.pendingJobs || [];
+    if (pendingJobs.length > 0) {
+      _deadLetterQueue.push(...pendingJobs);
+      console.log(`[boot] ${pendingJobs.length} job ZK in Dead Letter Queue`);
+      State.dispatch('ZK_JOBS_QUEUED', { count: pendingJobs.length });
+    }
+
+    // Ora possiamo terminare in sicurezza
     _zkWorker.terminate();
     _zkWorker = null;
-    console.log('[boot] ZK worker terminato (sessione bloccata)');
+    console.log('[boot] ZK worker terminato con graceful shutdown');
+  };
+
+  _zkWorker.addEventListener('message', onShutdownAck);
+  _zkWorker.postMessage({ type: 'INTENT_SHUTDOWN' });
+});
+
+// Al prossimo unlock, riprova i job in coda
+State.subscribe('APP_READY', () => {
+  if (_deadLetterQueue.length > 0) {
+    console.log(`[boot] ripristino ${_deadLetterQueue.length} job ZK dalla Dead Letter Queue`);
+    State.dispatch('ZK_RETRY_QUEUED_JOBS', { jobs: [..._deadLetterQueue] });
+    _deadLetterQueue.length = 0;
   }
 });
 
