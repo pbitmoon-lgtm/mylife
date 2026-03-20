@@ -162,7 +162,7 @@ window.addEventListener('load', async () => {
 // ═══════════════════════════════════════════════
 // LOCK
 // ═══════════════════════════════════════════════
-let _pinLocked = false; // blocca il pad durante la verifica crypto
+let _pinLocked = false;
 
 async function pinKey(d) {
   if (_pinLocked) return;
@@ -172,35 +172,27 @@ async function pinKey(d) {
 
   if (S.lockPin.length === 6) {
     _pinLocked = true;
-    document.getElementById('lock-sub').textContent = '🔓 Verifica in corso...';
-    dotsSpinner('pin-dots');
-
-    // Cede il controllo al browser per aggiornare l'UI prima della crypto
-    await new Promise(r => setTimeout(r, 30));
+    document.getElementById('lock-sub').textContent = '🔓 Verifica...';
+    // Breve pausa per aggiornare l'UI
+    await new Promise(r => setTimeout(r, 50));
 
     let ok = false;
     try {
-      // Timeout di sicurezza: se impiega più di 5 secondi, mostra errore
-      const result = await Promise.race([
-        CE.unlock(S.lockPin),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
-      ]);
-      ok = result;
-    } catch (err) {
-      console.error('unlock error:', err);
+      ok = await CE.unlock(S.lockPin);
+      console.log('CE.unlock result:', ok);
+    } catch(e) {
+      console.error('CE.unlock threw:', e);
       ok = false;
     }
 
     if (ok) {
       dotsSuccess('pin-dots');
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 150));
+      _pinLocked = false;
       await unlockApp();
     } else {
       dots('pin-dots', 6, true);
-      const msg = S.lockPin === '------'
-        ? 'Errore. Riprova.'
-        : 'PIN errato. Riprova.';
-      document.getElementById('lock-sub').textContent = msg;
+      document.getElementById('lock-sub').textContent = 'PIN errato. Riprova.';
       if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
       setTimeout(() => {
         S.lockPin = '';
@@ -208,9 +200,7 @@ async function pinKey(d) {
         dots('pin-dots', 0, false);
         document.getElementById('lock-sub').textContent = 'Inserisci il tuo PIN';
       }, 900);
-      return;
     }
-    _pinLocked = false;
   }
 }
 
@@ -222,27 +212,26 @@ function pinDel() {
   }
 }
 
-// Anima i pallini come spinner durante la verifica crypto
+// Anima i pallini come spinner
 function dotsSpinner(cid) {
   const pfx = cid === 'pin-dots' ? 'd' : cid === 'setup-dots' ? 'sd' : 'cd';
   let i = 0;
-  const interval = setInterval(() => {
+  const iv = setInterval(() => {
+    if (!_pinLocked) { clearInterval(iv); return; }
     for (let j = 0; j < 6; j++) {
       const el = document.getElementById(`${pfx}${j}`);
-      if (!el) continue;
-      el.className = 'pin-dot' + (j === i % 6 ? ' filled' : '');
+      if (el) el.className = 'pin-dot' + (j === i % 6 ? ' filled' : '');
     }
     i++;
-    if (!_pinLocked) clearInterval(interval);
   }, 120);
 }
 
-// Tutti i pallini verdi per un attimo prima di entrare
+// Pallini verdi = successo
 function dotsSuccess(cid) {
   const pfx = cid === 'pin-dots' ? 'd' : cid === 'setup-dots' ? 'sd' : 'cd';
   for (let i = 0; i < 6; i++) {
     const el = document.getElementById(`${pfx}${i}`);
-    if (el) el.className = 'pin-dot filled success';
+    if (el) el.className = 'pin-dot success';
   }
 }
 async function unlockApp(){
@@ -279,28 +268,33 @@ function setupKey(d){
   if(S.setupPin.length===6)setTimeout(()=>goStep('step-confirm'),200);
 }
 function setupDel(){S.setupPin=S.setupPin.slice(0,-1);dots('setup-dots',S.setupPin.length,false);}
-async function confirmKey(d){
-  if(S.confirmPin.length>=6)return;
-  S.confirmPin+=d;dots('confirm-dots',S.confirmPin.length,false);
-  if(S.confirmPin.length===6){
-    if(S.confirmPin===S.setupPin){
-      setTimeout(async()=>{
-        if(S.recovMode){
-          await CE.resetPin(S.setupPin,S.recovSeed||new Uint8Array(16));
-          S.recovMode=false;
-          navTo('setup-screen');
-          document.querySelectorAll('.wizard-step').forEach(s=>s.classList.remove('active'));
+async function confirmKey(d) {
+  if (S.confirmPin.length >= 6) return;
+  S.confirmPin += d;
+  dots('confirm-dots', S.confirmPin.length, false);
+  if (S.confirmPin.length === 6) {
+    if (S.confirmPin === S.setupPin) {
+      setTimeout(async () => {
+        if (S.recovMode) {
+          await CE.resetPin(S.setupPin, S.recovSeed || new Uint8Array(32));
+          S.recovMode = false;
+          document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
           await unlockApp();
         } else {
-          S.recovWords=await CE.setup(S.setupPin);
-          document.getElementById('phrase-grid').innerHTML=
-            S.recovWords.map((w,i)=>`<div class="phrase-word"><span class="phrase-num">${String(i+1).padStart(2,'0')}</span><span class="phrase-w">${w}</span></div>`).join('');
+          // Mostra messaggio calibrazione — avviene solo una volta
+          document.querySelector('#step-confirm .wizard-sub') &&
+            (document.querySelector('#step-confirm .wizard-sub').textContent = '⚙️ Configurazione sicurezza...');
+          S.recovWords = await CE.setup(S.setupPin);
+          document.getElementById('phrase-grid').innerHTML =
+            S.recovWords.map((w, i) =>
+              `<div class="phrase-word"><span class="phrase-num">${String(i+1).padStart(2,'0')}</span><span class="phrase-w">${w}</span></div>`
+            ).join('');
           goStep('step-phrase');
         }
-      },200);
+      }, 200);
     } else {
-      dots('confirm-dots',6,true);
-      setTimeout(()=>{S.confirmPin='';dots('confirm-dots',0,false);},800);
+      dots('confirm-dots', 6, true);
+      setTimeout(() => { S.confirmPin = ''; dots('confirm-dots', 0, false); }, 800);
     }
   }
 }
