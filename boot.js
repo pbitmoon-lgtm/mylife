@@ -389,13 +389,71 @@ window.addEventListener('popstate', () => {
 });
 history.pushState({}, '');
 
-// ─── ESPONI FUNZIONI GLOBALI PER HTML ─────────────────
-window.lockApp      = lockApp;
-window.confirmReset = confirmReset;
-window.doRecovery   = doRecovery;
-window.finishSetup  = finishSetup;
-window.buildVerifyUI = buildVerifyUI;
-window.UI           = null; // verrà impostato da ui.js
+// ─── INTENT DISPATCHER ───────────────────────────────
+// Cattura i click sui bottoni con data-intent
+// e li traduce in eventi puri per state.js.
+// Zero funzioni globali — zero inquinamento del window.
+document.addEventListener('click', e => {
+  const el     = e.target.closest('[data-intent]');
+  const intent = el?.dataset.intent;
+  if (!intent) return;
+
+  const payload = el.dataset.payload
+    ? JSON.parse(el.dataset.payload)
+    : {};
+
+  switch (intent) {
+    case 'INTENT_LOCK_APP':
+      State.dispatch('CRYPTO_LOCK');
+      break;
+    case 'INTENT_RESET_APP':
+      if (confirm('ATTENZIONE\n\nCancellare TUTTI i dati?\nUsare SOLO se hai perso le 12 parole.\n\nSei sicuro?')) {
+        Hardware.fullReset();
+        State.dispatch('INTENT_CLEAR_ALL');
+        localStorage.clear();
+        location.reload();
+      }
+      break;
+    case 'INTENT_RECOVERY':
+      State.dispatch('AUTH_NEED_RECOVERY', { reason: 'forgot_pin' });
+      break;
+    case 'INTENT_SHOW_STEP':
+      UI.showStep(payload.step);
+      break;
+    case 'INTENT_FINISH_SETUP':
+      finishSetup();
+      break;
+    case 'INTENT_DO_RECOVERY':
+      doRecovery();
+      break;
+    default:
+      // Intent non gestito da boot — potrebbe essere gestito da altri moduli
+      State.dispatch(intent, payload);
+  }
+});
+
+// ─── ZK WORKER ───────────────────────────────────────
+// Spawna il Web Worker ZK in background dopo APP_READY
+// Gira in thread separato — non blocca mai la UI
+State.subscribe('APP_READY', () => {
+  try {
+    const worker = new Worker('./zk-worker.js');
+    worker.onmessage = e => {
+      if (e.data.type === 'WORKER_READY') {
+        console.log('[boot] ZK worker pronto');
+        State.dispatch('ZK_WORKER_READY', { worker });
+      } else {
+        State.dispatch('ZK_WORKER_MESSAGE', e.data);
+      }
+    };
+    worker.onerror = err => {
+      console.warn('[boot] ZK worker non disponibile:', err.message);
+      // Non è un errore fatale — M4 è opzionale
+    };
+  } catch (e) {
+    console.warn('[boot] ZK worker non supportato:', e.message);
+  }
+});
 
 // ─── AVVIO ────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', boot);

@@ -325,8 +325,8 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
     <div class="key" data-fn="lockDel">⌫</div>
   </div>
   <div class="lock-links">
-    <span class="llink" onclick="window._showRecovery?.()">Non ricordo il PIN</span>
-    <span class="llink small" onclick="window.confirmReset?.()">Cancella tutto e ricomincia</span>
+    <span class="llink" data-intent="INTENT_RECOVERY">Non ricordo il PIN</span>
+    <span class="llink small" data-intent="INTENT_RESET_APP">Cancella tutto e ricomincia</span>
   </div>
 </div>
 
@@ -336,7 +336,7 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
     <div class="wiz-icon">🌱</div>
     <div class="wiz-title">Benvenuto in My Life</div>
     <div class="wiz-sub">La tua vita, tua. Privacy sulla chain, per sempre.</div>
-    <button class="btn" onclick="window.UI?.showStep('step-pin')">Crea il tuo PIN →</button>
+    <button class="btn" data-intent="INTENT_SHOW_STEP" data-payload='{"step":"step-pin"}'>Crea il tuo PIN →</button>
   </div>
   <div class="wizard" id="step-pin" style="display:none">
     <div class="wiz-icon">🔢</div>
@@ -381,15 +381,15 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
     <div class="wiz-title">Le tue 12 parole</div>
     <div class="warn-box">⚠️ Scrivi queste parole su carta adesso. Sono l'unico modo per recuperare i tuoi dati.</div>
     <div class="phrase-grid" id="phrase-grid"></div>
-    <button class="btn" onclick="window.UI?.showStep('step-verify')">Le ho scritte →</button>
+    <button class="btn" data-intent="INTENT_SHOW_STEP" data-payload='{"step":"step-verify"}'>Le ho scritte →</button>
   </div>
   <div class="wizard" id="step-verify" style="display:none;overflow-y:auto;max-height:100dvh;padding-top:52px">
     <div class="wiz-icon">🧠</div>
     <div class="wiz-title">Verifica</div>
     <div class="wiz-sub">Inserisci le parole richieste per confermare.</div>
     <div id="verify-grid" style="width:100%;max-width:340px;margin-bottom:20px"></div>
-    <button class="btn" id="verify-btn" onclick="window.finishSetup?.()" disabled>Entra →</button>
-    <button class="btn-ghost" onclick="window.UI?.showStep('step-phrase')">← Torna alle parole</button>
+    <button class="btn" id="verify-btn" data-intent="INTENT_FINISH_SETUP" disabled>Entra →</button>
+    <button class="btn-ghost" data-intent="INTENT_SHOW_STEP" data-payload='{"step":"step-phrase"}'>← Torna alle parole</button>
   </div>
 </div>
 
@@ -402,11 +402,11 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
       Inserisci le 12 parole di backup.
     </div>
     <div id="rec-grid" style="width:100%"></div>
-    <button class="btn" onclick="window.doRecovery?.()">Recupera accesso →</button>
+    <button class="btn" data-intent="INTENT_DO_RECOVERY">Recupera accesso →</button>
     <div id="rec-err" style="font-size:12px;text-align:center;margin-top:10px;min-height:18px"></div>
     <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--border);width:100%;text-align:center">
       <span style="font-size:11px;color:var(--red);cursor:pointer;text-decoration:underline"
-        onclick="window.confirmReset?.()">Cancella tutto e ricomincia</span>
+        data-intent="INTENT_RESET_APP">Cancella tutto e ricomincia</span>
     </div>
   </div>
 </div>
@@ -418,7 +418,7 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
       <div class="home-title">🌱 My Life</div>
       <div class="home-time" id="home-time"></div>
     </div>
-    <button class="lock-btn" onclick="window.lockApp?.()">🔒</button>
+    <button class="lock-btn" data-intent="INTENT_LOCK_APP">🔒</button>
   </div>
   <div class="widgets">
     <div class="widget w-map" onclick="openMap()">
@@ -615,7 +615,7 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
     <div class="s-group">
       <div class="s-group-title">Sicurezza</div>
       <div class="s-row">
-        <div class="s-item" onclick="window.lockApp?.()">
+        <div class="s-item" data-intent="INTENT_LOCK_APP">
           <div class="s-label">Blocca app</div><span style="color:var(--accent)">🔒</span>
         </div>
       </div>
@@ -668,12 +668,9 @@ function closeSection(id) {
     document.getElementById('home-screen').classList.add('active');
   }
 }
-// Recovery shortcut
-window._showRecovery = function() {
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  document.getElementById('recovery-screen').classList.add('active');
-  // boot.js gestisce buildRecoveryUI
-};
+// Navigazione sezioni — queste funzioni aprono schermate
+// non crittografiche, quindi non passano per state.js
+// (sono solo toggle CSS, nessuna logica di business)
 </script>
 
 <!-- ══════ ENTRY POINT — ES MODULE ══════ -->
