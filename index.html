@@ -613,6 +613,8 @@ function showStep(id) {
   ['step-welcome','step-pin','step-confirm','step-phrase','step-verify']
     .forEach(s => document.getElementById(s).style.display = 'none');
   document.getElementById(id).style.display = 'flex';
+  // Costruisce la UI di verifica quando si arriva allo step
+  if (id === 'step-verify') buildVerifyUI();
 }
 
 // ══════════════════════════════════════════════════════
@@ -832,9 +834,13 @@ function chkVerify() {
 }
 
 async function finishSetup() {
-  const u = UF.read();
-  if (u) { u.backupVerified = true; UF.write(u); }
-  enterApp();
+  try {
+    const u = UF.read();
+    if (u) { u.backupVerified = true; UF.write(u); }
+    await enterApp();
+  } catch(e) {
+    showErr('finishSetup error: ' + e.message);
+  }
 }
 
 // ══════════════════════════════════════════════════════
