@@ -144,43 +144,47 @@ setInterval(()=>{
 
 
 
-// ═══════════════════════════════════════════════
-// BOOT — flusso definitivo con device fingerprint
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// BOOT — flusso di accesso definitivo
+//
+// Logica:
+// 1. Nessun utente configurato → wizard primo avvio
+// 2. Utente configurato, stesso device → lock screen PIN
+// 3. Utente configurato, device diverso → recovery 12 parole
+// ═══════════════════════════════════════════════════════
 window.addEventListener('load', async () => {
   history.replaceState({ screen: 'base' }, '');
-  await initDB();
+  await DB.init();
   loadSettings();
 
-  if (!CE.ok()) {
-    // Nessun utente configurato su questo device → wizard
-    console.log('[boot] nessun utente → setup wizard');
-    localStorage.removeItem('ml_iter'); // reset calibrazione
+  if (!AUTH.isConfigured()) {
+    // Prima volta su questo device — nessun utente trovato
+    console.log('[boot] nessun utente → wizard');
     navTo('setup-screen');
     goStep('step-welcome');
     return;
   }
 
-  // Controlla se è lo stesso device
-  const sameDevice = await CE.sameDevice();
+  const sameDevice = await AUTH.isCurrentDevice();
   if (!sameDevice) {
-    // Utente esiste ma su device diverso → recovery con 12 parole
-    console.log('[boot] device diverso → recovery');
+    // File utente trovato ma device diverso
+    // (cache cancellata, telefono cambiato, browser diverso)
+    console.log('[boot] device non riconosciuto → recovery');
     navTo('recovery-screen');
-    buildRecoveryForm('new-device'); // mostra messaggio specifico
+    buildRecoveryUI('new-device');
     return;
   }
 
-  // Stesso device → lock screen normale
+  // Device riconosciuto → lock screen
   console.log('[boot] device riconosciuto → lock screen');
   navTo('lock-screen');
 });
 
 
 
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // LOCK — sblocco con PIN
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 let _pinLocked = false;
 
 async function pinKey(d) {
@@ -191,36 +195,44 @@ async function pinKey(d) {
 
   if (S.lockPin.length === 6) {
     _pinLocked = true;
+
+    // Mostra feedback immediato
     document.getElementById('lock-sub').textContent = '🔓 Verifica...';
-    await new Promise(r => setTimeout(r, 30));
+    await new Promise(r => setTimeout(r, 30)); // lascia aggiornare UI
 
     let result = false;
-    try { result = await CE.unlock(S.lockPin); }
-    catch(e) { console.error('[lock]', e); }
+    try {
+      result = await AUTH.unlock(S.lockPin);
+    } catch (e) {
+      console.error('[lock]', e);
+    }
 
     if (result === true) {
+      // PIN corretto — entra
       dotsSuccess('pin-dots');
       await new Promise(r => setTimeout(r, 150));
       _pinLocked = false;
       await unlockApp();
 
     } else if (result === 'wrong_device') {
-      // Device cambiato → vai a recovery
+      // Device cambiato — vai a recovery
       _pinLocked = false;
-      S.lockPin = '';
+      S.lockPin  = '';
       dots('pin-dots', 0, false);
       navTo('recovery-screen');
-      buildRecoveryForm('new-device');
+      buildRecoveryUI('new-device');
 
     } else {
+      // PIN sbagliato
       dots('pin-dots', 6, true);
       document.getElementById('lock-sub').textContent = 'PIN errato. Riprova.';
       if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
       setTimeout(() => {
-        S.lockPin = '';
+        S.lockPin  = '';
         _pinLocked = false;
         dots('pin-dots', 0, false);
-        document.getElementById('lock-sub').textContent = 'La tua privacy, sulla chain, per sempre';
+        document.getElementById('lock-sub').textContent =
+          'La tua privacy, sulla chain, per sempre';
       }, 900);
     }
   }
@@ -234,11 +246,23 @@ function pinDel() {
   }
 }
 
+// Animazione pallini successo (verdi)
 function dotsSuccess(cid) {
-  const pfx = cid==='pin-dots'?'d': cid==='setup-dots'?'sd':'cd';
+  const pfx = cid === 'pin-dots' ? 'd' : cid === 'setup-dots' ? 'sd' : 'cd';
   for (let i = 0; i < 6; i++) {
     const el = document.getElementById(`${pfx}${i}`);
     if (el) el.className = 'pin-dot success';
+  }
+}
+
+// Aggiorna i pallini (vuoti / pieni / errore)
+function dots(cid, n, err) {
+  const pfx = cid === 'pin-dots' ? 'd' : cid === 'setup-dots' ? 'sd' : 'cd';
+  for (let i = 0; i < 6; i++) {
+    const el = document.getElementById(`${pfx}${i}`);
+    if (!el) continue;
+    el.className = 'pin-dot' +
+      (err ? ' error' : i < n ? ' filled' : '');
   }
 }
 
@@ -248,40 +272,43 @@ async function unlockApp() {
 }
 
 function lockApp() {
-  CE.lock();
+  AUTH.lock();
   if (S.tracking) stopTracking();
   document.getElementById('note-editor').classList.remove('open');
-  S.lockPin = '';
+  S.lockPin  = '';
   _pinLocked = false;
   navTo('lock-screen');
 }
 
-// Reset completo — ultima risorsa
+// Reset completo — ULTIMA RISORSA
+// Cancella tutto: utente, dati, impostazioni
 function resetAppData() {
-  if (!confirm('Cancellare TUTTI i dati e ricominciare da zero?\nQuesta operazione non è reversibile.\n\nUSA QUESTA OPZIONE SOLO SE HAI PERSO LE 12 PAROLE.')) return;
+  if (!confirm(
+    'ATTENZIONE\n\n' +
+    'Questa operazione cancella TUTTI i tuoi dati:\n' +
+    '- Viaggi, note, preferiti\n' +
+    '- Account e PIN\n\n' +
+    'Usa questa opzione SOLO se hai perso le 12 parole ' +
+    'e non puoi più accedere in nessun altro modo.\n\n' +
+    'Sei sicuro?'
+  )) return;
+
+  AUTH.fullReset();
+  DB.clearAll().catch(console.error);
   localStorage.clear();
-  indexedDB.deleteDatabase('MyLife');
   location.reload();
 }
 
-function dots(cid, n, err) {
-  const pfx = cid==='pin-dots'?'d': cid==='setup-dots'?'sd':'cd';
-  for (let i = 0; i < 6; i++) {
-    const el = document.getElementById(`${pfx}${i}`);
-    if (!el) continue;
-    el.className = 'pin-dot' + (err?' error': i<n?' filled':'');
-  }
-}
 
 
-
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // SETUP — wizard primo avvio
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 function goStep(id) {
-  document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.wizard-step')
+    .forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  if (id === 'step-verify') buildVerify();
+  if (id === 'step-verify') buildVerifyUI();
 }
 
 function setupKey(d) {
@@ -290,6 +317,7 @@ function setupKey(d) {
   dots('setup-dots', S.setupPin.length, false);
   if (S.setupPin.length === 6) setTimeout(() => goStep('step-confirm'), 200);
 }
+
 function setupDel() {
   S.setupPin = S.setupPin.slice(0, -1);
   dots('setup-dots', S.setupPin.length, false);
@@ -301,39 +329,44 @@ async function confirmKey(d) {
   dots('confirm-dots', S.confirmPin.length, false);
 
   if (S.confirmPin.length === 6) {
+
     if (S.confirmPin !== S.setupPin) {
+      // PIN non corrisponde
       dots('confirm-dots', 6, true);
-      const sub = document.querySelector('#step-confirm .wizard-sub');
-      if (sub) sub.textContent = 'PIN diverso. Riprova.';
       setTimeout(() => {
         S.confirmPin = '';
         dots('confirm-dots', 0, false);
-        if (sub) sub.textContent = 'Inseriscilo di nuovo per confermare.';
-      }, 900);
+      }, 800);
       return;
     }
 
-    // PIN confermato
+    // PIN confermato — procedi
     setTimeout(async () => {
+      const subEl = document.querySelector('#step-confirm .wizard-sub');
+
       if (S.recovMode) {
-        // Migrazione su nuovo device dopo recovery con 12 parole
+        // Migrazione su nuovo device dopo recovery
         try {
-          const sub = document.querySelector('#step-confirm .wizard-sub');
-          if (sub) sub.textContent = '⚙️ Configurazione nuovo device...';
-          await CE.migrate(S.setupPin, S.recovSeed);
-          S.recovMode = false; S.recovSeed = null;
-          document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+          if (subEl) subEl.textContent = '⚙️ Configurazione nuovo device...';
+          await AUTH.migrateToDevice(S.setupPin, S.recovSeed);
+          S.recovMode = false;
+          S.recovSeed = null;
+          document.querySelectorAll('.wizard-step')
+            .forEach(s => s.classList.remove('active'));
           await unlockApp();
-        } catch(e) {
-          console.error('[setup] migrate error:', e);
-          alert('Errore nella configurazione. Riprova.');
+        } catch (e) {
+          console.error('[setup] migrazione error:', e);
+          if (subEl) subEl.textContent = 'Errore. Riprova.';
         }
+
       } else {
-        // Setup normale: primo avvio
+        // Setup normale — primo avvio
         try {
-          const sub = document.querySelector('#step-confirm .wizard-sub');
-          if (sub) sub.textContent = '⚙️ Configurazione sicurezza...';
-          S.recovWords = await CE.setup(S.setupPin);
+          if (subEl) subEl.textContent = '⚙️ Configurazione sicurezza...';
+          // AUTH.setup fa calibrazione PBKDF2 (~2s prima volta)
+          S.recovWords = await AUTH.setup(S.setupPin);
+
+          // Mostra le 12 parole
           document.getElementById('phrase-grid').innerHTML =
             S.recovWords.map((w, i) =>
               `<div class="phrase-word">
@@ -342,113 +375,139 @@ async function confirmKey(d) {
               </div>`
             ).join('');
           goStep('step-phrase');
-        } catch(e) {
-          console.error('[setup] CE.setup error:', e);
-          alert('Errore. Riprova.');
+
+        } catch (e) {
+          console.error('[setup] error:', e);
+          if (subEl) subEl.textContent = 'Errore nella configurazione. Riprova.';
         }
       }
     }, 200);
   }
 }
+
 function confirmDel() {
   S.confirmPin = S.confirmPin.slice(0, -1);
   dots('confirm-dots', S.confirmPin.length, false);
 }
 
-function buildVerify() {
+// Costruisce la griglia di verifica delle 12 parole
+// Chiede 4 parole a caso per confermare che l'utente le ha scritte
+function buildVerifyUI() {
   S.verifyIdx = [];
   while (S.verifyIdx.length < 4) {
     const n = Math.floor(Math.random() * 12);
     if (!S.verifyIdx.includes(n)) S.verifyIdx.push(n);
   }
-  S.verifyIdx.sort((a,b) => a-b);
-  document.getElementById('verify-grid').innerHTML = S.verifyIdx.map(i =>
-    `<div class="recovery-row">
-      <span class="recovery-num">#${i+1}</span>
-      <input class="recovery-input" data-i="${i}"
-        placeholder="parola ${i+1}..." oninput="chkVerify()">
-    </div>`
-  ).join('');
+  S.verifyIdx.sort((a, b) => a - b);
+
+  document.getElementById('verify-grid').innerHTML =
+    S.verifyIdx.map(i =>
+      `<div class="recovery-row">
+        <span class="recovery-num">#${i + 1}</span>
+        <input class="recovery-input" data-i="${i}"
+          placeholder="parola ${i + 1}..."
+          autocomplete="off" autocorrect="off"
+          spellcheck="false" oninput="checkVerify()">
+      </div>`
+    ).join('');
 }
 
-function chkVerify() {
-  let ok = true;
+function checkVerify() {
+  let allOk = true;
   document.querySelectorAll('#verify-grid .recovery-input').forEach(inp => {
     const v = inp.value.trim().toLowerCase();
-    if (!v) { inp.className = 'recovery-input'; ok = false; }
-    else if (v === S.recovWords[+inp.dataset.i]) inp.className = 'recovery-input ok';
-    else { inp.className = 'recovery-input err'; ok = false; }
+    if (!v) {
+      inp.className = 'recovery-input';
+      allOk = false;
+    } else if (v === S.recovWords[+inp.dataset.i]) {
+      inp.className = 'recovery-input ok';
+    } else {
+      inp.className = 'recovery-input err';
+      allOk = false;
+    }
   });
-  document.getElementById('verify-btn').disabled = !ok;
+  document.getElementById('verify-btn').disabled = !allOk;
 }
 
 async function finishSetup() {
-  CE.markBackupVerified();
-  document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+  AUTH.markBackupVerified();
+  document.querySelectorAll('.wizard-step')
+    .forEach(s => s.classList.remove('active'));
   await unlockApp();
 }
 
 
 
-// ═══════════════════════════════════════════════
-// RECOVERY — accesso da nuovo device con 12 parole
-// ═══════════════════════════════════════════════
-function buildRecoveryForm(mode) {
+// ═══════════════════════════════════════════════════════
+// RECOVERY — accesso con 12 parole
+// Usato per: PIN dimenticato, device nuovo, cache cancellata
+// ═══════════════════════════════════════════════════════
+function buildRecoveryUI(mode) {
   const titleEl = document.getElementById('rec-title');
   const subEl   = document.getElementById('rec-sub-text');
+  const errEl   = document.getElementById('rec-err');
 
   if (mode === 'new-device') {
-    if (titleEl) titleEl.textContent = '📱 Nuovo dispositivo rilevato';
-    if (subEl)   subEl.textContent   = 'Inserisci le 12 parole di backup per trasferire il tuo account su questo telefono.';
+    if (titleEl) titleEl.textContent = '📱 Nuovo dispositivo';
+    if (subEl)   subEl.textContent   =
+      'Questo dispositivo non è riconosciuto. ' +
+      'Inserisci le 12 parole di backup per trasferire il tuo account.';
   } else {
     if (titleEl) titleEl.textContent = '🔑 Recupero accesso';
-    if (subEl)   subEl.textContent   = 'Inserisci le 12 parole di backup per accedere.';
+    if (subEl)   subEl.textContent   =
+      'Inserisci le tue 12 parole di backup per accedere.';
   }
 
+  if (errEl) errEl.textContent = '';
+
   document.getElementById('recovery-grid').innerHTML =
-    Array.from({length: 12}, (_, i) =>
+    Array.from({ length: 12 }, (_, i) =>
       `<div class="recovery-row">
-        <span class="recovery-num">#${i+1}</span>
+        <span class="recovery-num">#${i + 1}</span>
         <input class="recovery-input" id="rw${i}"
-          placeholder="parola ${i+1}..."
-          autocomplete="off" autocorrect="off" spellcheck="false"
+          placeholder="parola ${i + 1}..."
+          autocomplete="off" autocorrect="off"
+          spellcheck="false"
           style="text-transform:lowercase">
       </div>`
     ).join('');
-  document.getElementById('rec-err').textContent = '';
 }
 
 function showRecovery() {
   navTo('recovery-screen');
-  buildRecoveryForm('forgot-pin');
+  buildRecoveryUI('forgot-pin');
 }
 
 async function doRecovery() {
-  const words = Array.from({length: 12}, (_, i) => {
+  const words = Array.from({ length: 12 }, (_, i) => {
     const el = document.getElementById(`rw${i}`);
     return el ? el.value.trim().toLowerCase() : '';
   });
 
   const errEl = document.getElementById('rec-err');
-  errEl.textContent = '🔍 Verifica parole...';
-  errEl.style.color = 'var(--text2)';
+  if (errEl) {
+    errEl.style.color   = 'var(--text2)';
+    errEl.textContent   = '🔍 Verifica parole in corso...';
+  }
 
-  const result = await CE.recover(words);
+  const result = await AUTH.recoverWithWords(words);
 
   if (!result) {
-    errEl.style.color = 'var(--red)';
-    errEl.textContent = '❌ Parole non corrette. Controlla e riprova.';
+    if (errEl) {
+      errEl.style.color = 'var(--red)';
+      errEl.textContent =
+        '❌ Parole non corrette. Controlla l'ordine e riprova.';
+    }
     return;
   }
 
-  // Parole corrette → imposta nuovo PIN per questo device
+  // Parole corrette — vai a scegliere nuovo PIN per questo device
   S.recovSeed  = result.seed;
-  CE.key       = result.key;
+  AUTH._activeKey = result.key; // attiva chiave provvisoriamente
   S.recovMode  = true;
   S.setupPin   = '';
   S.confirmPin = '';
 
-  // Vai al wizard per scegliere il PIN su questo device
   navTo('setup-screen');
   goStep('step-pin');
 }
