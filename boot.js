@@ -223,12 +223,14 @@ function buildVerifyUI() {
     `<div class="rrow">
       <span class="rnum">#${i+1}</span>
       <input class="rinput" data-i="${i}" placeholder="parola ${i+1}..."
-        autocomplete="off" autocorrect="off" spellcheck="false" oninput="checkVerify()">
+        autocomplete="off" autocorrect="off" spellcheck="false">
     </div>`
   ).join('');
+  // checkVerify è gestito dal listener delegato in boot.js
 }
 
-window.checkVerify = function() {
+// checkVerify: listener delegato — nessuna funzione globale
+function checkVerify() {
   let ok = true;
   document.querySelectorAll('#verify-grid .rinput').forEach(inp => {
     const v = inp.value.trim().toLowerCase();
@@ -238,7 +240,12 @@ window.checkVerify = function() {
   });
   const btn = document.getElementById('verify-btn');
   if (btn) btn.disabled = !ok;
-};
+}
+
+// Listener delegato per gli input di verifica
+document.addEventListener('input', e => {
+  if (e.target.closest('#verify-grid')) checkVerify();
+});
 
 function finishSetup() {
   Hardware.markBackupVerified();
@@ -345,7 +352,7 @@ function confirmReset() {
 
 // ─── PIN PAD TOUCH HANDLER ────────────────────────────
 const _pinBuffers = { lock:[], setup:[], confirm:[] };
-window._getPinBuffer = function(type) { return _pinBuffers[type] || []; };
+// _getPinBuffer è interno — non esposto al window
 
 const KEY_FNS = {
   lockKey, lockDel,
@@ -393,6 +400,14 @@ history.pushState({}, '');
 // Cattura i click sui bottoni con data-intent
 // e li traduce in eventi puri per state.js.
 // Zero funzioni globali — zero inquinamento del window.
+// Event delegation per input nel verify grid
+// Sostituisce oninput="checkVerify()" nell'HTML
+document.addEventListener('input', e => {
+  if (e.target.closest('#verify-grid')) {
+    checkVerify();
+  }
+});
+
 document.addEventListener('click', e => {
   const el     = e.target.closest('[data-intent]');
   const intent = el?.dataset.intent;
@@ -432,26 +447,45 @@ document.addEventListener('click', e => {
   }
 });
 
-// ─── ZK WORKER ───────────────────────────────────────
-// Spawna il Web Worker ZK in background dopo APP_READY
-// Gira in thread separato — non blocca mai la UI
+// ─── ZK WORKER — SINGLETON ───────────────────────────
+// Spawna il Web Worker ZK UNA SOLA VOLTA per sessione.
+// APP_READY può essere emesso più volte (lock/unlock).
+// Il Singleton Pattern garantisce un solo worker attivo.
+let _zkWorker = null;
+
 State.subscribe('APP_READY', () => {
+  // Singleton: se il worker esiste già, non crearne un altro
+  if (_zkWorker) {
+    console.log('[boot] ZK worker già attivo — skip');
+    return;
+  }
   try {
-    const worker = new Worker('./zk-worker.js');
-    worker.onmessage = e => {
+    _zkWorker = new Worker('./zk-worker.js');
+    _zkWorker.onmessage = e => {
       if (e.data.type === 'WORKER_READY') {
-        console.log('[boot] ZK worker pronto');
-        State.dispatch('ZK_WORKER_READY', { worker });
+        console.log('[boot] ZK worker pronto (singleton)');
+        State.dispatch('ZK_WORKER_READY');
       } else {
         State.dispatch('ZK_WORKER_MESSAGE', e.data);
       }
     };
-    worker.onerror = err => {
-      console.warn('[boot] ZK worker non disponibile:', err.message);
-      // Non è un errore fatale — M4 è opzionale
+    _zkWorker.onerror = err => {
+      console.warn('[boot] ZK worker errore:', err.message);
+      _zkWorker = null; // reset singleton se crash — permette retry
     };
   } catch (e) {
-    console.warn('[boot] ZK worker non supportato:', e.message);
+    console.warn('[boot] Web Worker non supportato:', e.message);
+    _zkWorker = null;
+  }
+});
+
+// Termina il worker quando la sessione viene bloccata
+// Libera CPU e memoria immediatamente
+State.subscribe('CRYPTO_LOCKED', () => {
+  if (_zkWorker) {
+    _zkWorker.terminate();
+    _zkWorker = null;
+    console.log('[boot] ZK worker terminato (sessione bloccata)');
   }
 });
 
