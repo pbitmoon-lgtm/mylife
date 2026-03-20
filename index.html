@@ -709,6 +709,14 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
 @keyframes locPulse{0%,100%{box-shadow:0 0 0 0 rgba(108,142,255,.4)}50%{box-shadow:0 0 0 8px rgba(108,142,255,0)}}
 @keyframes staggerIn{from{opacity:0;transform:translateY(20px) scale(.95)}to{opacity:1;transform:none}}
+
+/* Error banner */
+#error-banner{
+  position:fixed;top:0;left:0;right:0;z-index:9999;
+  background:#c0392b;color:#fff;padding:12px 16px;
+  font-size:13px;line-height:1.5;display:none;
+  font-family:'Sora',sans-serif;
+}
 </style>
 </head>
 <body>
@@ -717,6 +725,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);
 <body>
 
 <div id="bg-mesh"></div>
+<div id="error-banner"></div>
 
 <!-- ══════════════════════════════════
      LOCK SCREEN
@@ -1195,14 +1204,35 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);
      6. chat.js    — chat placeholder (M1.3)
      7. settings.js — impostazioni (dipende da db)
 ══════════════════════════════════════════════ -->
-<script src="crypto.js?v=auth1"></script>
-<script src="auth.js?v=auth1"></script>
-<script src="db.js?v=auth1"></script>
-<script src="app.js?v=auth1"></script>
-<script src="map.js?v=auth1"></script>
-<script src="notes.js?v=auth1"></script>
-<script src="chat.js?v=auth1"></script>
-<script src="settings.js?v=auth1"></script>
+<script>
+// Cattura errori globali e li mostra sullo schermo
+window.addEventListener('error', function(e) {
+  var b = document.getElementById('error-banner');
+  if (b) {
+    b.style.display = 'block';
+    b.innerHTML = '⚠️ Errore JS: ' + e.message +
+      '<br>File: ' + e.filename.split('/').pop() +
+      ' riga ' + e.lineno;
+  }
+  console.error('Global error:', e);
+});
+window.addEventListener('unhandledrejection', function(e) {
+  var b = document.getElementById('error-banner');
+  if (b) {
+    b.style.display = 'block';
+    b.innerHTML = '⚠️ Errore: ' + (e.reason?.message || e.reason);
+  }
+  console.error('Unhandled rejection:', e.reason);
+});
+</script>
+<script src="crypto.js?v=auth2"></script>
+<script src="auth.js?v=auth2"></script>
+<script src="db.js?v=auth2"></script>
+<script src="app.js?v=auth2"></script>
+<script src="map.js?v=auth2"></script>
+<script src="notes.js?v=auth2"></script>
+<script src="chat.js?v=auth2"></script>
+<script src="settings.js?v=auth2"></script>
 
 </body>
 </html>
