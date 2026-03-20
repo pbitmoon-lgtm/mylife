@@ -817,5 +817,15 @@ window.addEventListener('popstate', () => {
 });
 window.history.pushState({}, '');
 </script>
+<script>
+// Registra Service Worker — risolve problema cache per sempre
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('[SW] registrato:', reg.scope))
+      .catch(err => console.warn('[SW] errore:', err));
+  });
+}
+</script>
 </body>
 </html>

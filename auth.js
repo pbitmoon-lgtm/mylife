@@ -10,14 +10,14 @@
 async function getDeviceId() {
   let uuid = localStorage.getItem('ml_uuid');
   if (!uuid) {
-    uuid = h(crypto.getRandomValues(new Uint8Array(16)));
+    uuid = CR.h(crypto.getRandomValues(new Uint8Array(16)));
     localStorage.setItem('ml_uuid', uuid);
   }
   const traits = [uuid, screen.width, screen.height,
     Intl.DateTimeFormat().resolvedOptions().timeZone,
     navigator.language].join('|');
   const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(traits));
-  return h(new Uint8Array(hash));
+  return CR.h(new Uint8Array(hash));
 }
 
 // ══════════════════════════════════════════════════════

@@ -177,7 +177,7 @@ async function confirmKey(d) {
 
         UF.write({
           v: '3',
-          userId:    existing?.userId || h(crypto.getRandomValues(new Uint8Array(16))),
+          userId:    existing?.userId || CR.h(crypto.getRandomValues(new Uint8Array(16))),
           deviceId,
           created:   existing?.created || today(),
           migratedAt: today(),
@@ -201,7 +201,7 @@ async function confirmKey(d) {
 
         UF.write({
           v: '3',
-          userId:   h(crypto.getRandomValues(new Uint8Array(16))),
+          userId:   CR.h(crypto.getRandomValues(new Uint8Array(16))),
           deviceId,
           created:  today(),
           encSeed,
