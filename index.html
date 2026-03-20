@@ -621,12 +621,31 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
       </div>
     </div>
     <div class="s-group">
+      <div class="s-group-title">Backup Fisico</div>
+      <div class="s-row">
+        <div class="s-item" onclick="document.getElementById('backup-panel').classList.add('open')">
+          <div>
+            <div class="s-label">Crea backup cifrato</div>
+            <div class="s-sub">Esporta .enc su USB/NAS — indipendente dal device</div>
+          </div>
+          <span style="color:var(--accent)">💾</span>
+        </div>
+        <div class="s-item" onclick="document.getElementById('restore-panel').classList.add('open')">
+          <div>
+            <div class="s-label">Ripristina da backup</div>
+            <div class="s-sub">Importa file .enc con password backup</div>
+          </div>
+          <span style="color:var(--accent)">📂</span>
+        </div>
+      </div>
+    </div>
+    <div class="s-group">
       <div class="s-group-title">Dati</div>
       <div class="s-row">
         <div class="s-item" onclick="SettingsModule?.export()">
-          <div class="s-label">Esporta tutto (JSON)</div><span style="color:var(--accent)">↓</span>
+          <div class="s-label">Esporta tutto (JSON leggibile)</div><span style="color:var(--accent)">↓</span>
         </div>
-        <div class="s-item" onclick="SettingsModule?.clearAll()">
+        <div class="s-item" data-intent="INTENT_RESET_APP">
           <div class="s-label" style="color:var(--red)">Cancella tutti i dati</div>
           <span style="color:var(--red)">✕</span>
         </div>
@@ -641,6 +660,62 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
 <!-- HIDDEN INPUTS -->
 <input type="file" id="import-in" accept=".json" multiple style="display:none"
   onchange="MapModule?.onImport(this)">
+
+
+<!-- BACKUP PANEL -->
+<div class="side-panel" id="backup-panel">
+  <div class="sp-header">
+    <div class="sp-title">💾 Crea Backup Cifrato</div>
+    <button class="sp-close" onclick="document.getElementById('backup-panel').classList.remove('open')">✕</button>
+  </div>
+  <div class="sp-body">
+    <div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:20px">
+      Il backup è cifrato con una password <b style="color:var(--text)">separata dal PIN</b> del dispositivo.<br><br>
+      Se perdi il telefono, ti bastano:<br>
+      • Il file <code style="color:var(--accent)">.enc</code><br>
+      • Questa password di backup<br><br>
+      <span style="color:var(--warn)">⚠️ Salva la password in un posto sicuro — non è recuperabile.</span>
+    </div>
+    <input class="mm-input" id="backup-pwd" type="password" placeholder="Password backup (min 8 caratteri)..." autocomplete="new-password">
+    <input class="mm-input" id="backup-pwd2" type="password" placeholder="Conferma password..." autocomplete="new-password">
+    <div id="backup-err" style="font-size:12px;color:var(--red);margin-bottom:10px;min-height:16px"></div>
+    <div id="backup-progress" style="display:none;font-size:13px;color:var(--text2);margin-bottom:12px;text-align:center">
+      ⏳ Creazione backup in corso...
+    </div>
+    <button class="btn" onclick="startBackup()">Crea e scarica backup</button>
+    <button class="btn-ghost" onclick="document.getElementById('backup-panel').classList.remove('open')">Annulla</button>
+  </div>
+</div>
+
+<!-- RESTORE PANEL -->
+<div class="side-panel" id="restore-panel">
+  <div class="sp-header">
+    <div class="sp-title">📂 Ripristina Backup</div>
+    <button class="sp-close" onclick="document.getElementById('restore-panel').classList.remove('open')">✕</button>
+  </div>
+  <div class="sp-body">
+    <div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:20px">
+      Seleziona il file <code style="color:var(--accent)">.enc</code> e inserisci la password con cui è stato creato.
+      <br><br>
+      <span style="color:var(--red)">⚠️ Il ripristino sovrascrive i dati correnti.</span>
+    </div>
+    <div style="border:2px dashed var(--border);border-radius:14px;padding:24px;text-align:center;cursor:pointer;margin-bottom:14px"
+      onclick="document.getElementById('restore-file-in').click()">
+      <div style="font-size:28px;margin-bottom:8px">📁</div>
+      <div id="restore-file-name" style="font-size:13px;color:var(--text2)">Seleziona file .enc...</div>
+    </div>
+    <input type="file" id="restore-file-in" accept=".enc" style="display:none" onchange="onRestoreFileSelected(this)">
+    <input class="mm-input" id="restore-pwd" type="password" placeholder="Password backup..." autocomplete="current-password">
+    <div id="restore-err" style="font-size:12px;color:var(--red);margin-bottom:10px;min-height:16px"></div>
+    <div id="restore-progress" style="display:none;font-size:13px;color:var(--text2);margin-bottom:12px;text-align:center">
+      ⏳ Ripristino in corso...
+    </div>
+    <button class="btn" onclick="startRestore()">Ripristina</button>
+    <button class="btn-ghost" onclick="document.getElementById('restore-panel').classList.remove('open')">Annulla</button>
+  </div>
+</div>
+
+<input type="file" id="restore-file-in-hidden" accept=".enc" style="display:none">
 
 <!-- ══════ NAVIGATION HELPERS ══════ -->
 <script>
@@ -671,6 +746,85 @@ function closeSection(id) {
 // Navigazione sezioni — queste funzioni aprono schermate
 // non crittografiche, quindi non passano per state.js
 // (sono solo toggle CSS, nessuna logica di business)
+</script>
+
+<!-- ══════ BACKUP HELPERS ══════ -->
+<script>
+let _restoreFileBuffer = null;
+
+function startBackup() {
+  const pwd  = document.getElementById('backup-pwd').value;
+  const pwd2 = document.getElementById('backup-pwd2').value;
+  const err  = document.getElementById('backup-err');
+  const prog = document.getElementById('backup-progress');
+
+  if (pwd.length < 8) { err.textContent = 'Password troppo corta (minimo 8 caratteri)'; return; }
+  if (pwd !== pwd2)   { err.textContent = 'Le password non corrispondono'; return; }
+
+  err.textContent = '';
+  prog.style.display = 'block';
+  document.querySelector('#backup-panel .btn').disabled = true;
+
+  // Ascolta completamento/errore
+  const unsubOk  = window.__State?.subscribe('BACKUP_COMPLETE', ({ filename, sizeKB }) => {
+    unsubOk(); unsubErr();
+    prog.style.display = 'none';
+    document.querySelector('#backup-panel .btn').disabled = false;
+    document.getElementById('backup-panel').classList.remove('open');
+    alert(`✅ Backup creato: ${filename} (${sizeKB} KB)`);
+  });
+  const unsubErr = window.__State?.subscribe('BACKUP_ERROR', ({ error }) => {
+    unsubOk(); unsubErr();
+    prog.style.display = 'none';
+    document.querySelector('#backup-panel .btn').disabled = false;
+    err.textContent = '❌ ' + error;
+  });
+
+  window.__State?.dispatch('INTENT_CREATE_BACKUP', { password: pwd });
+}
+
+function onRestoreFileSelected(inp) {
+  const file = inp.files[0];
+  if (!file) return;
+  document.getElementById('restore-file-name').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = e => { _restoreFileBuffer = e.target.result; };
+  reader.readAsArrayBuffer(file);
+}
+
+function startRestore() {
+  const pwd  = document.getElementById('restore-pwd').value;
+  const err  = document.getElementById('restore-err');
+  const prog = document.getElementById('restore-progress');
+
+  if (!_restoreFileBuffer) { err.textContent = 'Seleziona un file .enc'; return; }
+  if (!pwd) { err.textContent = 'Inserisci la password di backup'; return; }
+
+  if (!confirm('Ripristinare il backup? I dati correnti verranno sovrascritti.')) return;
+
+  err.textContent = '';
+  prog.style.display = 'block';
+  document.querySelector('#restore-panel .btn').disabled = true;
+
+  const unsubOk  = window.__State?.subscribe('BACKUP_RESTORED', ({ recordCount }) => {
+    unsubOk(); unsubErr();
+    prog.style.display = 'none';
+    document.querySelector('#restore-panel .btn').disabled = false;
+    document.getElementById('restore-panel').classList.remove('open');
+    alert(`✅ Ripristino completato: ${recordCount} record`);
+  });
+  const unsubErr = window.__State?.subscribe('RESTORE_ERROR', ({ error }) => {
+    unsubOk(); unsubErr();
+    prog.style.display = 'none';
+    document.querySelector('#restore-panel .btn').disabled = false;
+    err.textContent = '❌ ' + error;
+  });
+
+  window.__State?.dispatch('INTENT_RESTORE_BACKUP', {
+    fileBuffer: _restoreFileBuffer,
+    password: pwd
+  });
+}
 </script>
 
 <!-- ══════ ENTRY POINT — ES MODULE ══════ -->

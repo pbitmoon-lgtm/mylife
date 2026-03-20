@@ -17,6 +17,7 @@ import State    from './state.js';
 import Hardware from './hardware.js';
 import './crypto.js';   // si auto-registra sugli eventi
 import './db.js';       // si auto-registra sugli eventi
+import './backup.js';   // si auto-registra sugli eventi
 import UI       from './ui.js';
 
 // ─── STATO UI LOCALE ──────────────────────────────────
@@ -541,6 +542,10 @@ State.subscribe('APP_READY', () => {
     _deadLetterQueue.length = 0;
   }
 });
+
+// Espone State per gli helper JS nell'HTML (backup panel)
+// Solo State — nessuna funzione di business
+window.__State = State;
 
 // ─── AVVIO ────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', boot);

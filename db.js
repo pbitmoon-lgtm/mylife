@@ -43,6 +43,11 @@ const StorageManager = (() => {
 
   // ─── OPERAZIONI CRUD BASSO LIVELLO ────────────────────
   async function write(storeName, record) {
+    // Rispetta il freeze del backup — non scrive durante lo snapshot
+    if (typeof BackupModule !== 'undefined' && BackupModule.isFrozen?.()) {
+      console.warn('[db] write bloccata: backup freeze attivo');
+      throw new Error('STORAGE_FROZEN');
+    }
     return new Promise((resolve, reject) => {
       const tx  = _db.transaction(storeName, 'readwrite');
       const req = tx.objectStore(storeName).put(record);
@@ -206,7 +211,7 @@ const StorageManager = (() => {
     }
   });
 
-  // 7. Export completo per backup
+  // 7. Export completo per backup JSON (settings.js)
   State.subscribe('INTENT_EXPORT_ALL', async () => {
     try {
       const records = await readAll('core_records');
@@ -214,6 +219,71 @@ const StorageManager = (() => {
       State.dispatch('EXPORT_READY', { records, assets, ts: Date.now() });
     } catch (err) {
       State.dispatch('EXPORT_ERROR', { error: err.message });
+    }
+  });
+
+  // 8. Export per backup fisico cifrato (backup.js)
+  // Decifra i record e li passa a backup.js per la ri-cifratura
+  // con chiave indipendente dal dispositivo
+  State.subscribe('INTENT_EXPORT_ALL_FOR_BACKUP', async () => {
+    try {
+      const rawRecords = await readAll('core_records');
+      const rawAssets  = await readAll('media_assets');
+
+      let processed = 0;
+      const total   = rawRecords.length + rawAssets.length;
+
+      // Decifra e invia ogni record tramite eventi esistenti
+      for (const r of rawRecords) {
+        State.dispatch('REQUEST_DECRYPT', { id: r.id, buffer: r.data, isAsset: false });
+      }
+      for (const a of rawAssets) {
+        State.dispatch('REQUEST_DECRYPT', { id: a.id, buffer: a.data, isAsset: true });
+      }
+
+      // Segnala a backup.js che lo snapshot è completo
+      State.dispatch('BACKUP_SNAPSHOT_COMPLETE', {
+        recordCount: rawRecords.length,
+        assetCount:  rawAssets.length,
+      });
+    } catch (err) {
+      State.dispatch('BACKUP_ERROR', { error: 'Snapshot fallito: ' + err.message });
+    }
+  });
+
+  // 9. Ripristino vault da backup fisico
+  State.subscribe('INTENT_RESTORE_VAULT', async ({ records, assets }) => {
+    try {
+      // Prima svuota gli store esistenti
+      await clear('core_records');
+      await clear('media_assets');
+
+      // Re-cifra e riscrivi ogni record con la chiave del device corrente
+      for (const record of records) {
+        State.dispatch('INTENT_SAVE_RECORD', {
+          recordId:    record.id,
+          type:        record.type,
+          textPayload: record,
+        });
+      }
+
+      // Riscrivi gli asset
+      for (const asset of assets) {
+        if (asset.data) {
+          State.dispatch('REQUEST_ENCRYPT', {
+            id:      asset.id,
+            payload: asset.data,
+            isAsset: true,
+          });
+        }
+      }
+
+      State.dispatch('BACKUP_RESTORED', {
+        recordCount: records.length,
+        assetCount:  assets.length,
+      });
+    } catch (err) {
+      State.dispatch('RESTORE_ERROR', { error: 'Ripristino DB fallito: ' + err.message });
     }
   });
 
