@@ -1054,6 +1054,38 @@ function toggleFav() {
   S.favMode = !S.favMode;
   document.querySelector('.mibtn:nth-child(2)').style.background =
     S.favMode ? 'rgba(245,200,66,.2)' : '';
+  document.querySelector('.mibtn:nth-child(2)').textContent =
+    S.favMode ? '✕' : '⭐';
+  const hint = document.getElementById('fav-hint');
+  if (hint) hint.style.display = S.favMode ? 'block' : 'none';
+}
+
+function openFavModal(latlng) {
+  S.pendFav = latlng;
+  // Simple prompt-based modal for now
+  const name = prompt('Nome del luogo:');
+  if (!name || !name.trim()) { toggleFav(); return; }
+  const icons = ['📍','🏠','🏢','🍕','☕','🏖','🏔','❤️','🏥','⛽'];
+  const iconChoice = prompt('Scegli icona (0-9):\n' +
+    icons.map((ic,i) => i+': '+ic).join('  '), '0');
+  const icon = icons[parseInt(iconChoice)||0] || '📍';
+  const note = prompt('Nota (opzionale):') || '';
+  saveFavoriteAt(latlng.lat, latlng.lng, name.trim(), note.trim(), icon);
+  toggleFav();
+}
+
+async function saveFavoriteAt(lat, lng, name, note, icon) {
+  try {
+    const fav = { id:Date.now(), lat, lng, name, note, icon, ts:Date.now() };
+    await dbPut('favorites', fav);
+    // Add marker immediately
+    const mkIcon = L.divIcon({
+      html:`<div class="fav-mk">${icon}</div>`,
+      iconSize:[30,30], iconAnchor:[15,15], className:''
+    });
+    L.marker([lat,lng],{icon:mkIcon}).addTo(S.map)
+      .bindPopup(`<div class="pop-t">${name}</div>${note?`<div class="pop-s">${note}</div>`:''}`);
+  } catch(e) { showErr('Errore salvataggio: ' + e.message); }
 }
 async function renderFavMarkers() {
   try {
