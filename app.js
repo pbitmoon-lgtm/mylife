@@ -148,13 +148,23 @@ setInterval(()=>{
 // BOOT
 // ═══════════════════════════════════════════════
 window.addEventListener('load', async () => {
-  // Stato base nella cronologia: il primo gesto indietro non esce dall'app
   history.replaceState({ screen: 'base' }, '');
-
   await initDB();
   loadSettings();
-  if (CE.ok()) navTo('lock-screen');
-  else { navTo('setup-screen'); goStep('step-welcome'); }
+
+  if (CE.ok()) {
+    // Config v6 valido trovato → mostra lock screen
+    console.log('[boot] config v6 trovato → lock screen');
+    navTo('lock-screen');
+  } else {
+    // Nessun config o config vecchio → wizard primo avvio
+    console.log('[boot] nessun config valido → setup wizard');
+    // Pulisce eventuali config vecchi e incompatibili
+    localStorage.removeItem('ml_crypto');
+    localStorage.removeItem('ml_iter');
+    navTo('setup-screen');
+    goStep('step-welcome');
+  }
 });
 
 
@@ -234,14 +244,30 @@ function dotsSuccess(cid) {
     if (el) el.className = 'pin-dot success';
   }
 }
-async function unlockApp(){
+// ── Reset completo — cancella tutto e riparte ──
+function resetAppData() {
+  const msg = 'Cancellare tutti i dati e ricominciare da zero?\n\nQuesta operazione non è reversibile.';
+  if (!confirm(msg)) return;
+  // Cancella localStorage
+  localStorage.removeItem('ml_crypto');
+  localStorage.removeItem('ml_iter');
+  localStorage.removeItem('ml_settings');
+  // Cancella IndexedDB
+  indexedDB.deleteDatabase('MyLife');
+  // Ricarica la pagina → mostrerà il wizard
+  location.reload();
+}
+
+async function unlockApp() {
   navTo('home-screen');
   await updateHomeWidgets();
 }
-function lockApp(){
-  CE.lock();S.tracking&&stopTracking();
+
+function lockApp() {
+  CE.lock();
+  if (S.tracking) stopTracking();
   document.getElementById('note-editor').classList.remove('open');
-  S.lockPin='';
+  S.lockPin = '';
   navTo('lock-screen');
 }
 function dots(cid,n,err){

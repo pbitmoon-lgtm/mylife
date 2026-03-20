@@ -13,8 +13,8 @@ const CE = {
   ok() {
     try {
       const c = JSON.parse(localStorage.getItem('ml_crypto') || 'null');
-      // Config valido = ha tutti i campi obbligatori
-      return !!(c && c.salt && c.enc && c.iter && c.check);
+      // Accetta SOLO v6 — versioni precedenti incompatibili → wizard
+      return !!(c && c.v === '6' && c.salt && c.enc && c.iter && c.check);
     } catch { return false; }
   },
 
