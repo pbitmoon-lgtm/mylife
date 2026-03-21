@@ -853,8 +853,18 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
 <script>
 function openMap() {
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  document.getElementById('map-screen').classList.add('active');
-  MapModule?.init();
+  const mapScreen = document.getElementById('map-screen');
+  mapScreen.classList.add('active');
+  // Leaflet legge le dimensioni del container dopo il repaint CSS.
+  // requestAnimationFrame garantisce che display:block sia applicato
+  // prima che Leaflet misuri l'altezza del container.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (!window.MapModule) return;
+      MapModule.init();          // crea la mappa se non esiste
+      MapModule.invalidate?.();  // forza ricalcolo dimensioni se già esiste
+    });
+  });
 }
 function openNotes() {
   document.getElementById('notes-screen').classList.add('open');
