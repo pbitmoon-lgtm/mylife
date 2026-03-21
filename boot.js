@@ -18,6 +18,7 @@ import Hardware from './hardware.js';
 import './crypto.js';   // si auto-registra sugli eventi
 import './db.js';       // si auto-registra sugli eventi
 import './backup.js';   // si auto-registra sugli eventi
+import './calendar.js'; // si auto-registra sugli eventi
 import UI       from './ui.js';
 
 // ─── STATO UI LOCALE ──────────────────────────────────
