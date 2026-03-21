@@ -554,7 +554,10 @@ const MapModule = (() => {
   // Necessario dopo ogni toggle display:none → display:block.
   function invalidate() {
     if (_map) {
-      setTimeout(() => _map.invalidateSize(), 50);
+      setTimeout(() => {
+        _map.invalidateSize();
+        console.log('[map] invalidateSize chiamato');
+      }, 300);
     }
   }
 
