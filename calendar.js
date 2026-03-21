@@ -282,27 +282,21 @@ const CalendarModule = (() => {
     if (!picker) return;
 
     const notes = [];
-    let _count = -1;
 
-    const unsubDecrypted = State.subscribe('PAYLOAD_DECRYPTED', ({ payload, isAsset, requestId }) => {
+    // Raccoglie le note mentre arrivano decifrate
+    const unsubDecrypt = State.subscribe('PAYLOAD_DECRYPTED', ({ payload, isAsset, requestId }) => {
       if (isAsset || !payload || requestId !== 'cal_pick_notes') return;
       if (payload.type === 'note') notes.push(payload);
-      // Controlla se abbiamo ricevuto tutti i record
-      if (_count >= 0 && notes.length >= _count) showPicker();
     });
 
-    const unsubStarted = State.subscribe('RECORDS_LOAD_STARTED', ({ requestId, count }) => {
+    // State.once() si scollega automaticamente dopo il primo evento
+    // — nessun rischio di memory leak, nessun unsub manuale dimenticato
+    State.once('RECORDS_LOAD_STARTED', ({ requestId }) => {
       if (requestId !== 'cal_pick_notes') return;
-      unsubStarted();                               // una sola volta
-      _count = count;
-      if (count === 0) showPicker();
-    });
-
-    function showPicker() {
-      unsubDecrypted();
+      unsubDecrypt();
       picker.innerHTML = notes.length
         ? notes.map(n => {
-            const d = JSON.stringify({id:n.id||0,title:n.title||''})
+            const d = JSON.stringify({id:n.id||0, title:n.title||''})
               .replace(/'/g, '&#39;');
             return `<div class="cal-pick-item"
               data-note='${d}'
@@ -312,7 +306,7 @@ const CalendarModule = (() => {
           }).join('')
         : '<div class="no-items">Nessuna nota disponibile</div>';
       picker.style.display = 'block';
-    }
+    });
 
     State.dispatch('INTENT_LOAD_RECORDS', { type:'note', requestId:'cal_pick_notes' });
   }
@@ -336,13 +330,35 @@ const CalendarModule = (() => {
     const picker = document.getElementById('cal-place-picker');
     if (!picker) return;
 
-    // Prendi i preferiti già in cache nel MapModule
-    const favs = window.MapModule?.getFavsForCalendar?.() || [];
+    // Tenta dalla cache del MapModule (già caricati)
+    let favs = window.MapModule?.getFavsForCalendar?.() || [];
+
+    if (!favs.length) {
+      // Cache vuota — carica i preferiti e poi mostra
+      const loaded = [];
+      const unsubD = State.subscribe('PAYLOAD_DECRYPTED', ({ payload, isAsset, requestId }) => {
+        if (isAsset || !payload || requestId !== 'cal_pick_places') return;
+        if (payload.type === 'favorite') loaded.push(payload);
+      });
+      State.once('RECORDS_LOAD_STARTED', ({ requestId }) => {
+        if (requestId !== 'cal_pick_places') return;
+        unsubD();
+        favs = loaded;
+        _renderPlacePicker(picker, favs);
+      });
+      State.dispatch('INTENT_LOAD_RECORDS', { type:'favorite', requestId:'cal_pick_places' });
+      return;
+    }
+
+    _renderPlacePicker(picker, favs);
+  }
+
+  function _renderPlacePicker(picker, favs) {
     picker.innerHTML = favs.length
       ? favs.map(f => {
-          const data = {id:f.id,name:f.name,icon:f.icon||'📍',lat:f.lat,lng:f.lng};
+          const data = { id:f.id, name:f.name, icon:f.icon||'📍', lat:f.lat, lng:f.lng };
           return `<div class="cal-pick-item"
-            data-place='${JSON.stringify(data)}'
+            data-place='${JSON.stringify(data).replace(/'/g,"&#39;")}'
             onclick="CalendarModule.selectPlaceEl(this)">
             ${f.icon||'📍'} ${UI.esc(f.name)}
           </div>`;

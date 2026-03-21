@@ -78,28 +78,12 @@ const MapModule = (() => {
 
   // ─── GESTORI EVENTI PAYLOAD ───────────────────────────
   // UN SOLO subscribe per PAYLOAD_DECRYPTED — smista per requestId e tipo
+  // Subscribe globale — solo per marker iniziali sulla mappa
+  // Il panel usa il proprio subscribe locale con unsub (dentro openPanel)
   State.subscribe('PAYLOAD_DECRYPTED', ({ id, payload, isAsset, requestId }) => {
     if (isAsset || !payload) return;
-
-    switch (requestId) {
-      // Caricamento iniziale preferiti → marker sulla mappa
-      case 'map_init_favs':
-        if (payload.type === 'favorite' && _map) addFavMarker(payload);
-        break;
-
-      // Panel viaggi
-      case 'map_panel_trips':
-        if (payload.type === 'trip') _panelTrips.push(payload);
-        break;
-
-      // Panel preferiti
-      case 'map_panel_favs':
-        if (payload.type === 'favorite') _panelFavs.push(payload);
-        break;
-
-      // Nessun requestId riconosciuto → ignora (altri moduli)
-      default:
-        break;
+    if (requestId === 'map_init_favs' && payload.type === 'favorite' && _map) {
+      addFavMarker(payload);
     }
   });
 
@@ -352,6 +336,7 @@ const MapModule = (() => {
         <div class="pop-s" style="margin-top:4px">
           ${fav.lat.toFixed(4)}, ${fav.lng.toFixed(4)}
         </div>`);
+    mk._favId = fav.id;  // traccia id per evitare duplicati
     _favMks.push(mk);
     return mk;
   }
@@ -375,19 +360,52 @@ const MapModule = (() => {
 
     document.getElementById('trips-panel')?.classList.add('open');
 
-    // Carica entrambi i tipi con requestId dedicati
-    State.dispatch('INTENT_LOAD_RECORDS', {
-      type:'trip',     requestId:'map_panel_trips'
-    });
-    State.dispatch('INTENT_LOAD_RECORDS', {
-      type:'favorite', requestId:'map_panel_favs'
+    let _tripsLoaded = false, _favsLoaded = false;
+
+    function checkReady() {
+      if (_tripsLoaded && _favsLoaded) {
+        _panelReady = true;
+        renderPanel();
+      }
+    }
+
+    // Conta record attesi per ogni tipo
+    let _tripsTotal = -1, _favsTotal = -1;
+    let _tripsGot = 0, _favsGot = 0;
+
+    const unsubStarted = State.subscribe('RECORDS_LOAD_STARTED', ({ requestId, count }) => {
+      if (requestId === 'map_panel_trips') {
+        _tripsTotal = count;
+        if (count === 0) { _tripsLoaded = true; checkReady(); }
+      }
+      if (requestId === 'map_panel_favs') {
+        _favsTotal = count;
+        if (count === 0) { _favsLoaded = true; checkReady(); }
+      }
     });
 
-    // Renderizza dopo attesa decifratura
+    const unsubDecrypted = State.subscribe('PAYLOAD_DECRYPTED', ({ id, payload, isAsset, requestId }) => {
+      if (isAsset || !payload) return;
+      if (requestId === 'map_panel_trips' && payload.type === 'trip') {
+        if (!_panelTrips.find(t => t.id === id)) _panelTrips.push({ ...payload, id });
+        _tripsGot++;
+        if (_tripsTotal >= 0 && _tripsGot >= _tripsTotal) { _tripsLoaded = true; checkReady(); }
+      }
+      if (requestId === 'map_panel_favs' && payload.type === 'favorite') {
+        if (!_panelFavs.find(f => f.id === id)) _panelFavs.push({ ...payload, id });
+        _favsGot++;
+        if (_favsTotal >= 0 && _favsGot >= _favsTotal) { _favsLoaded = true; checkReady(); }
+      }
+    });
+
+    // Safety timeout
     setTimeout(() => {
-      _panelReady = true;
-      renderPanel();
-    }, 500);
+      unsubStarted(); unsubDecrypted();
+      if (!_panelReady) { _panelReady = true; renderPanel(); }
+    }, 3000);
+
+    State.dispatch('INTENT_LOAD_RECORDS', { type:'trip',     requestId:'map_panel_trips' });
+    State.dispatch('INTENT_LOAD_RECORDS', { type:'favorite', requestId:'map_panel_favs'  });
   }
 
   function closePanel() {

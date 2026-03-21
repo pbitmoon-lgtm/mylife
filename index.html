@@ -975,7 +975,14 @@ async function confirmKey(d) {
     const sub = document.getElementById('confirm-sub');
     if (sub) sub.textContent = '⚙️ Configurazione...';
     try {
-      await window.Hardware?.setupWithPin(_setupPin);
+      if (window._recovSeed) {
+        // Recovery: migra su questo device con il seed recuperato
+        await window.Hardware?.migrateWithPin(_setupPin, window._recovSeed);
+        window._recovSeed = null;
+      } else {
+        // Primo avvio: crea nuovo account
+        await window.Hardware?.setupWithPin(_setupPin);
+      }
     } catch(e) {
       _confirming = false;
       console.error('setup error:', e);

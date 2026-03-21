@@ -191,25 +191,32 @@ const BackupModule = (() => {
 
       // 2. SNAPSHOT: richiedi tutti i dati a db.js
       // Usiamo una Promise che si risolve quando db.js risponde
+      // State.once() sostituisce il pattern manual subscribe+timeout+unsub
+      // Raccoglie i payload mentre arrivano, poi si risolve
       const { records, assets } = await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('Timeout snapshot')), 10000);
-
-        // Raccoglie i record decifrati
         const collectedRecords = [];
         const collectedAssets  = [];
 
-        const unsubRecords = State.subscribe('PAYLOAD_DECRYPTED', ({ id, payload, isAsset }) => {
-          if (isAsset) collectedAssets.push({ id, payload });
-          else collectedRecords.push({ id, ...payload });
+        // Raccoglie i record mentre vengono decifrati
+        const unsubDecrypt = State.subscribe('PAYLOAD_DECRYPTED', ({ id, payload, isAsset, requestId }) => {
+          if (requestId !== 'backup_export') return;
+          if (isAsset) collectedAssets.push({ id, data: payload });
+          else         collectedRecords.push({ id, ...payload });
         });
 
-        State.subscribe('BACKUP_SNAPSHOT_COMPLETE', ({ recordCount, assetCount }) => {
-          clearTimeout(timeout);
-          unsubRecords();
+        // once() aspetta il segnale di completamento snapshot
+        // e si scollega automaticamente — nessun timeout manuale
+        State.once('BACKUP_SNAPSHOT_COMPLETE', () => {
+          unsubDecrypt(); // scollega il raccoglitore
           resolve({ records: collectedRecords, assets: collectedAssets });
         });
 
-        // Chiedi a db.js di esportare tutto
+        // Fallback timeout — se db.js non risponde entro 10s
+        setTimeout(() => {
+          unsubDecrypt();
+          reject(new Error('Timeout snapshot — db.js non ha risposto'));
+        }, 10000);
+
         State.dispatch('INTENT_EXPORT_ALL_FOR_BACKUP');
       });
 
