@@ -25,6 +25,17 @@ let _pinLocked  = false;
 async function boot() {
   console.log('[boot] avvio in corso...');
 
+  State.subscribe('AUTH_FAILED', ({ reason }) => {
+    document.getElementById('boot-loader').style.display = 'none';
+    if (reason === 'invalid_words') {
+      const err = document.getElementById('rec-err');
+      if (err) { err.style.color='var(--red)'; err.textContent='❌ Parole non corrette.'; }
+    } else {
+      // PIN sbagliato — feedback visivo
+      window.pinError?.();
+    }
+  });
+
   State.subscribe('SYSTEM_ERROR', ({ error }) => {
     document.getElementById('boot-loader').style.display = 'none';
     UI.showError(error);
@@ -78,6 +89,10 @@ async function boot() {
         ' · ' + n.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'});
     }
     console.log('[boot] ✅ Sistema sbloccato e pronto.');
+    // Aggiorna badge note nel widget home
+    setTimeout(() => {
+      State.dispatch('INTENT_LOAD_RECORDS', { type:'note', requestId:'home_badge' });
+    }, 500);
   });
 
   try {
@@ -166,7 +181,7 @@ State.subscribe('APP_READY', () => {
     _deadLetterQueue.length = 0;
   }
 
-  // Crea il worker solo se non esiste (Singleton)
+  // Singleton — crea il Worker solo se non esiste
   if (_zkWorker) return;
 
   try {
@@ -180,8 +195,22 @@ State.subscribe('APP_READY', () => {
     };
     _zkWorker.onerror = err => {
       console.warn('[boot] ZK worker errore:', err.message);
-      _zkWorker = null; 
+      _zkWorker = null;
     };
+
+    // Notifica il Worker quando l'app va in background/foreground
+    // Previene background throttling (setTimeout clamp a 1000ms su mobile)
+    document.addEventListener('visibilitychange', () => {
+      if (!_zkWorker) return;
+      if (document.hidden) {
+        _zkWorker.postMessage({ type: 'APP_BACKGROUND' });
+        State.dispatch('ZK_PAUSED');
+      } else {
+        _zkWorker.postMessage({ type: 'APP_FOREGROUND' });
+        State.dispatch('ZK_RESUMED');
+      }
+    });
+
   } catch (e) {
     console.warn('[boot] Web Worker non supportato:', e.message);
   }
@@ -213,6 +242,20 @@ State.subscribe('CRYPTO_LOCKED', () => {
 
   _zkWorker.addEventListener('message', onShutdownAck);
   _zkWorker.postMessage({ type: 'INTENT_SHUTDOWN' });
+});
+
+// Ascolta aggiornamenti critici dal Service Worker
+// Se c'è una nuova versione dei file → mostra banner di sicurezza
+navigator.serviceWorker?.addEventListener('message', event => {
+  if (event.data?.type === 'UPDATE_AVAILABLE') {
+    State.dispatch('UPDATE_AVAILABLE');
+  }
+});
+
+State.subscribe('UPDATE_AVAILABLE', () => {
+  // Banner non intrusivo — l'utente sceglie quando ricaricare
+  const banner = document.getElementById('update-banner');
+  if (banner) banner.style.display = 'flex';
 });
 
 // Si avvia automaticamente quando importato

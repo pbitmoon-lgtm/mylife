@@ -427,6 +427,29 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
 <!-- ERROR BANNER -->
 <div id="err"></div>
 
+<!-- BANNER AGGIORNAMENTO — visibile solo quando SW rileva nuova versione -->
+<div id="update-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;
+  z-index:9998;background:linear-gradient(135deg,#1a1a2e,#16213e);
+  border-top:1px solid var(--accent);padding:14px 16px;
+  align-items:center;justify-content:space-between;gap:12px;
+  font-family:'Sora',sans-serif;backdrop-filter:blur(20px)">
+  <div>
+    <div style="font-size:13px;font-weight:700;color:var(--text)">
+      🔒 Aggiornamento di sicurezza disponibile
+    </div>
+    <div style="font-size:11px;color:var(--text2);margin-top:2px">
+      Riavvia per applicare la patch
+    </div>
+  </div>
+  <button onclick="location.reload(true)"
+    style="padding:10px 18px;border-radius:20px;border:none;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    color:#fff;font-family:'Sora',sans-serif;font-size:13px;
+    font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">
+    Riavvia ora
+  </button>
+</div>
+
 <!-- BOOT LOADER — visibile durante l'inizializzazione -->
 <div id="boot-loader">
   <div class="boot-icon">🌱</div>

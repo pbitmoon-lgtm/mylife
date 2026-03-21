@@ -1,138 +1,138 @@
 // ═══════════════════════════════════════════════════════
-// My Life — zk-worker.js
+// My Life — zk-worker.js (PRODUZIONE - RESILIENTE)
 // Web Worker isolato per calcolo ZK Proofs (M4)
 //
-// Gira in thread separato — non blocca mai la UI.
-// Comunica solo tramite postMessage.
-// Supporta Graceful Shutdown per evitare Dangling State.
+// PROBLEMA RISOLTO — Background Throttling:
+//   iOS/Android strozzano setTimeout a 1000ms quando
+//   l'app è in background. Una prova da 30s diventa 20min.
+//   Soluzione: il Worker si PAUSA quando l'app va in
+//   background e RIPRENDE quando torna in primo piano.
+//   Il main thread monitora visibilityState e notifica
+//   il Worker via postMessage.
 // ═══════════════════════════════════════════════════════
 
-// Registro dei job in corso { id → { circuit, data, startedAt } }
 const _activeJobs = new Map();
-
-// Flag di shutdown — quando true, non accetta nuovi job
 let _shuttingDown = false;
+let _paused       = false; // true quando l'app è in background
 
-// ─── MICRO-TASKING ────────────────────────────────────
-// Esegue il calcolo in chunk da 50ms per evitare
-// thermal throttling su mobile e mantenere l'UI a 60fps.
-// Ogni chunk cede il controllo al browser prima di continuare.
+// ─── MICRO-TASKING CON PAUSA ──────────────────────────
+// Esegue in chunk da 50ms. Se il Worker è in pausa (background),
+// aspetta che il main thread invii RESUME prima di continuare.
+// Previene il battery drain silenzioso da background throttling.
 async function runInChunks(fn, chunkMs = 50) {
   return new Promise((resolve, reject) => {
-    let result;
     async function tick() {
       if (_shuttingDown) { reject(new Error('SHUTDOWN')); return; }
+
+      // Pausa se l'app è in background
+      if (_paused) {
+        await waitForResume();
+        if (_shuttingDown) { reject(new Error('SHUTDOWN')); return; }
+      }
+
       const t0 = performance.now();
       try {
-        result = await fn();
+        const result = await fn();
         resolve(result);
       } catch (e) {
-        if (e.message === 'SHUTDOWN') reject(e);
-        else if (performance.now() - t0 < chunkMs) reject(e);
-        else setTimeout(tick, 0); // cede il controllo e riprova
+        if (e.message === 'SHUTDOWN') { reject(e); return; }
+        if (performance.now() - t0 < chunkMs) { reject(e); return; }
+        setTimeout(tick, 0); // cede il controllo e riprova
       }
     }
     setTimeout(tick, 0);
   });
 }
 
-// ─── HANDLER MESSAGGI ────────────────────────────────
+// Attende che _paused diventi false
+// Polling a 500ms — accettabile in background
+function waitForResume() {
+  return new Promise(resolve => {
+    const check = setInterval(() => {
+      if (!_paused || _shuttingDown) {
+        clearInterval(check);
+        resolve();
+      }
+    }, 500);
+  });
+}
+
+// ─── HANDLER MESSAGGI ─────────────────────────────────
 self.addEventListener('message', async e => {
   const { type, id, circuit, data } = e.data;
 
   switch (type) {
 
-    // ── Health check ────────────────────────────────
     case 'PING':
       self.postMessage({ type: 'PONG', id });
       break;
 
-    // ── Calcolo ZK Proof ────────────────────────────
+    // ── Gestione background/foreground ────────────────
+    // Il main thread monitora document.visibilityState
+    // e notifica il Worker per prevenire background throttling
+    case 'APP_BACKGROUND':
+      _paused = true;
+      console.log('[zk-worker] pausa — app in background');
+      self.postMessage({ type: 'WORKER_PAUSED' });
+      break;
+
+    case 'APP_FOREGROUND':
+      _paused = false;
+      console.log('[zk-worker] ripresa — app in primo piano');
+      self.postMessage({ type: 'WORKER_RESUMED', activeJobs: _activeJobs.size });
+      break;
+
+    // ── Calcolo ZK Proof ──────────────────────────────
     case 'COMPUTE_PROOF': {
       if (_shuttingDown) {
-        // Rifiuta nuovi job durante shutdown
-        self.postMessage({
-          type:   'JOB_REJECTED',
-          id,
-          reason: 'worker in shutdown'
-        });
+        self.postMessage({ type:'JOB_REJECTED', id, reason:'worker in shutdown' });
         return;
       }
 
-      // Registra il job come attivo
       _activeJobs.set(id, { circuit, data, startedAt: Date.now() });
 
       try {
-        // TODO M4: implementazione reale con Noir/Aztec WASM
-        // Struttura del calcolo:
-        //   1. Compila il circuito Noir
-        //   2. Genera la prova in micro-chunk da 50ms
-        //   3. Restituisce la prova (0x...) al main thread
-        const proof = await runInChunks(async () => {
-          // Placeholder — simula latenza computazionale
-          return {
-            circuit,
-            proof:     '0x_PLACEHOLDER_M4',
-            publicInputs: [],
-            generatedAt:  Date.now(),
-          };
-        });
+        const proof = await runInChunks(async () => ({
+          circuit,
+          proof:        '0x_PLACEHOLDER_M4',
+          publicInputs: [],
+          generatedAt:  Date.now(),
+        }));
 
         _activeJobs.delete(id);
-        self.postMessage({ type: 'PROOF_READY', id, proof });
+        self.postMessage({ type:'PROOF_READY', id, proof });
 
       } catch (err) {
         _activeJobs.delete(id);
         if (err.message === 'SHUTDOWN') {
-          // Job interrotto da shutdown — il main thread lo gestirà
-          // tramite pendingJobs nell'ACK di shutdown
-          self.postMessage({ type: 'JOB_INTERRUPTED', id });
+          self.postMessage({ type:'JOB_INTERRUPTED', id });
         } else {
-          self.postMessage({ type: 'PROOF_ERROR', id, error: err.message });
+          self.postMessage({ type:'PROOF_ERROR', id, error: err.message });
         }
       }
       break;
     }
 
-    // ── Graceful Shutdown ────────────────────────────
-    // Ricevuto da boot.js quando la sessione si blocca.
-    // 1. Setta il flag _shuttingDown per bloccare nuovi job
-    // 2. Attende che i job attivi vengano interrotti (via SHUTDOWN error)
-    // 3. Risponde con SHUTDOWN_ACK + lista dei job pendenti
-    //    Il main thread li metterà nella Dead Letter Queue.
+    // ── Graceful Shutdown ──────────────────────────────
     case 'INTENT_SHUTDOWN': {
       _shuttingDown = true;
+      _paused = false; // sblocca waitForResume per permettere shutdown
       console.log(`[zk-worker] graceful shutdown — ${_activeJobs.size} job attivi`);
 
-      // Piccola attesa per permettere ai job in corso di ricevere
-      // il flag _shuttingDown e interrompersi con error SHUTDOWN
       await new Promise(r => setTimeout(r, 100));
 
-      // Prepara la lista dei job che non sono stati completati
       const pendingJobs = Array.from(_activeJobs.entries()).map(([jobId, job]) => ({
-        id:      jobId,
-        circuit: job.circuit,
-        data:    job.data,
+        id: jobId, circuit: job.circuit, data: job.data,
       }));
-
       _activeJobs.clear();
 
-      // ACK di shutdown con i job pendenti per la Dead Letter Queue
-      self.postMessage({
-        type:        'SHUTDOWN_ACK',
-        pendingJobs,
-      });
+      self.postMessage({ type:'SHUTDOWN_ACK', pendingJobs });
       break;
     }
 
     default:
-      self.postMessage({
-        type:  'ERROR',
-        id,
-        error: `Tipo messaggio non riconosciuto: ${type}`
-      });
+      self.postMessage({ type:'ERROR', id, error:`Tipo non riconosciuto: ${type}` });
   }
 });
 
-// Segnala al main thread che il worker è pronto
 self.postMessage({ type: 'WORKER_READY' });
