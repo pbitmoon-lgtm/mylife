@@ -113,12 +113,14 @@ const CryptoEngine = (() => {
     }
   });
 
-  // 3. Richiesta decifratura
-  State.subscribe('REQUEST_DECRYPT', async ({ id, buffer, isAsset }) => {
+  // 3. Richiesta decifratura — requestId viene preservato e ripassato
+  State.subscribe('REQUEST_DECRYPT', async ({ id, buffer, isAsset, requestId }) => {
     try {
       const arr     = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
       const payload = await decryptObject(arr);
-      State.dispatch('PAYLOAD_DECRYPTED', { id, payload, isAsset });
+      // requestId è CRITICO: permette ai moduli (notes, calendar, map)
+      // di filtrare solo i record che hanno richiesto loro
+      State.dispatch('PAYLOAD_DECRYPTED', { id, payload, isAsset, requestId });
     } catch (err) {
       console.error('[crypto] decrypt error:', err);
       State.dispatch('DECRYPTION_FAILED', { id, error: err.message });

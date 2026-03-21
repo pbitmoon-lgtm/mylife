@@ -30,16 +30,54 @@ async function boot() {
   });
 
   // Cascata di avvio
-  State.subscribe('AUTH_NEED_SETUP', () => UI.showStep('step-setup'));
-  State.subscribe('AUTH_NEED_PIN', () => UI.showStep('step-lock'));
-  State.subscribe('AUTH_NEED_RECOVERY', () => UI.showStep('step-recovery'));
+  State.subscribe('AUTH_NEED_SETUP', () => {
+    document.getElementById('auth-screen')?.classList.add('active');
+    UI.showStep('step-setup');
+    // Dentro step-setup mostra il benvenuto
+    setTimeout(() => {
+      if (typeof showWizStep === 'function') showWizStep('step-welcome');
+    }, 50);
+  });
+  State.subscribe('AUTH_NEED_PIN', () => {
+    document.getElementById('auth-screen')?.classList.add('active');
+    UI.showStep('step-lock');
+  });
+  State.subscribe('AUTH_NEED_RECOVERY', () => {
+    document.getElementById('auth-screen')?.classList.add('active');
+    if (typeof showRecovery === 'function') showRecovery();
+    else UI.showStep('step-recovery');
+  });
+
+  State.subscribe('AUTH_RECOVERY_VERIFIED', async ({ seed }) => {
+    // Mostra setup per impostare nuovo PIN sul device corrente
+    window._recovSeed = seed;
+    document.getElementById('auth-screen')?.classList.add('active');
+    UI.showStep('step-setup');
+    const pinSub = document.getElementById('pin-sub');
+    if (pinSub) pinSub.textContent = 'Scegli un nuovo PIN per questo dispositivo.';
+    if (typeof showWizStep === 'function') showWizStep('step-pin');
+  });
+
+  State.subscribe('CRYPTO_PERSIST_SEED', ({ encryptedSeed }) => {
+    Hardware.persistSeed(encryptedSeed);
+  });
 
   State.subscribe('APP_READY', () => {
     UI.hideError();
-    document.getElementById('boot-loader').style.display = 'none';
-    document.getElementById('auth-screen').classList.remove('active');
-    document.getElementById('home-screen').classList.add('active');
-    console.log('[boot] Sistema sbloccato e pronto.');
+    const loader = document.getElementById('boot-loader');
+    const auth   = document.getElementById('auth-screen');
+    const home   = document.getElementById('home-screen');
+    if (loader) loader.style.display = 'none';
+    if (auth)   auth.classList.remove('active');
+    if (home)   home.classList.add('active');
+    // Aggiorna orario home
+    const timeEl = document.getElementById('home-time');
+    if (timeEl) {
+      const n = new Date();
+      timeEl.textContent = n.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}) +
+        ' · ' + n.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'});
+    }
+    console.log('[boot] ✅ Sistema sbloccato e pronto.');
   });
 
   try {
@@ -177,5 +215,11 @@ State.subscribe('CRYPTO_LOCKED', () => {
   _zkWorker.postMessage({ type: 'INTENT_SHUTDOWN' });
 });
 
-// Innesco iniziale
-boot();
+// Esporta boot per l'import in index.html
+export { boot as default };
+// Avvio diretto se non importato
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', boot);
+} else {
+  boot();
+}

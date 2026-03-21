@@ -1,52 +1,1139 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#070710">
+<title>My Life</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#070710;--surface:rgba(255,255,255,.07);
+  --border:rgba(255,255,255,.1);--border2:rgba(255,255,255,.18);
+  --text:#f4f4fb;--text2:#9090b8;--text3:#45455a;
+  --accent:#6c8eff;--accent2:#9b7fff;
+  --green:#34d69e;--red:#ff5555;--warn:#ffb340;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Sora',sans-serif}
+
+/* ERROR BANNER */
+#err{position:fixed;top:0;left:0;right:0;z-index:9999;background:#c0392b;color:#fff;
+  padding:14px 16px;font-size:13px;line-height:1.5;display:none;word-break:break-word}
+
+/* BOOT LOADER */
+#boot-loader{position:fixed;inset:0;z-index:8000;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.boot-icon{font-size:56px;animation:float 2s ease-in-out infinite}
+.boot-label{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text2);letter-spacing:2px}
+
+/* AUTH SCREEN — contiene tutti gli step di autenticazione */
+#auth-screen{position:fixed;inset:0;z-index:7000;background:var(--bg);
+  display:none;align-items:center;justify-content:center}
+#auth-screen.active{display:flex}
+
+/* Step condivisi */
+.step{display:none;flex-direction:column;align-items:center;width:100%;max-width:380px;padding:0 24px}
+
+/* STEP LOCK */
+#step-lock{gap:0}
+.brand{text-align:center;margin-bottom:36px}
+.brand-icon{font-size:52px;margin-bottom:10px;animation:float 3s ease-in-out infinite}
+.brand-name{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;letter-spacing:2px;
+  background:linear-gradient(135deg,#fff,rgba(255,255,255,.6));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.brand-sub{font-size:12px;color:var(--text2);margin-top:6px;-webkit-text-fill-color:var(--text2)}
+.pin-dots{display:flex;gap:14px;margin-bottom:36px}
+.dot{width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.2);transition:all .15s}
+.dot.on{background:var(--accent);border-color:var(--accent);transform:scale(1.2);box-shadow:0 0 10px rgba(108,142,255,.5)}
+.dot.err{background:var(--red);border-color:var(--red);animation:shake .4s}
+.dot.ok{background:var(--green);border-color:var(--green)}
+.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:252px}
+.key{height:68px;border-radius:16px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.08);
+  font-size:22px;font-weight:600;color:var(--text);cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  user-select:none;-webkit-user-select:none;transition:all .1s}
+.key *{pointer-events:none}
+.key.pressed{background:rgba(108,142,255,.3);border-color:rgba(108,142,255,.5);transform:scale(.92)}
+.key.empty{background:transparent;border:none;cursor:default}
+.key-sub{font-size:8px;color:var(--text2);letter-spacing:1.5px;text-transform:uppercase;margin-top:2px}
+.lock-links{margin-top:24px;display:flex;flex-direction:column;align-items:center;gap:10px}
+.llink{font-size:13px;color:var(--text2);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.llink.small{font-size:11px;color:var(--text3)}
+
+/* SETUP WIZARD */
+.wiz-icon{font-size:52px;margin-bottom:16px}
+.wiz-title{font-size:22px;font-weight:800;text-align:center;letter-spacing:-.3px;margin-bottom:8px}
+.wiz-sub{font-size:14px;color:var(--text2);text-align:center;line-height:1.7;margin-bottom:32px;max-width:300px}
+.btn{width:100%;padding:16px;border-radius:14px;border:none;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  color:#fff;font-family:'Sora',sans-serif;font-size:16px;font-weight:700;
+  cursor:pointer;box-shadow:0 6px 20px rgba(108,142,255,.35);margin-bottom:10px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-ghost{width:100%;padding:14px;border-radius:14px;background:none;
+  border:1px solid rgba(255,255,255,.15);color:var(--text2);
+  font-family:'Sora',sans-serif;font-size:14px;cursor:pointer;margin-bottom:8px}
+.phrase-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;margin-bottom:20px}
+.phrase-word{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:10px;
+  padding:8px 12px;display:flex;align-items:center;gap:8px}
+.pnum{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);min-width:18px}
+.pword{font-size:14px;font-weight:600}
+.warn-box{background:rgba(255,179,64,.08);border:1px solid rgba(255,179,64,.3);
+  border-radius:12px;padding:12px 16px;width:100%;
+  font-size:13px;color:var(--warn);line-height:1.7;margin-bottom:20px;text-align:center}
+.rrow{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.rnum{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text3);min-width:24px;text-align:right}
+.rinput{flex:1;background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:10px;
+  padding:10px 12px;font-family:'Sora',sans-serif;font-size:14px;color:var(--text);outline:none}
+.rinput:focus{border-color:var(--accent)}.rinput.ok{border-color:var(--green)}.rinput.err{border-color:var(--red)}
+
+/* SCREENS (home + map) */
+.screen{position:fixed;inset:0;z-index:10;display:none;flex-direction:column;background:var(--bg)}
+.screen.active{display:flex}
+
+/* HOME */
+#home-screen{overflow-y:auto;align-items:stretch}
+.home-header{padding:52px 18px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.home-title{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700}
+.home-time{font-size:11px;color:var(--text2)}
+.widgets{padding:0 14px 20px;display:flex;flex-direction:column;gap:12px}
+.widget{border-radius:20px;padding:18px;border:1px solid var(--border);cursor:pointer;
+  transition:transform .15s;min-height:120px;display:flex;flex-direction:column}
+.widget:active{transform:scale(.97)}
+.w-icon{font-size:28px;margin-bottom:8px}
+.w-name{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.w-desc{font-size:12px;color:var(--text2);flex:1}
+.w-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.w-map{background:linear-gradient(135deg,rgba(52,214,158,.18),rgba(52,214,158,.06))}
+.w-notes{background:linear-gradient(135deg,rgba(108,142,255,.18),rgba(108,142,255,.06))}
+.w-chat{background:linear-gradient(135deg,rgba(255,110,180,.15),rgba(255,110,180,.05));opacity:.6}
+.w-cal{background:linear-gradient(135deg,rgba(255,179,64,.18),rgba(255,179,64,.06))}
+.w-settings{background:rgba(255,255,255,.05)}
+.w-chain{background:rgba(255,255,255,.03);opacity:.4;cursor:default}
+.w-badge{font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(255,255,255,.1);
+  color:var(--text2);display:inline-block;margin-top:8px;align-self:flex-start}
+.lock-btn{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.07);
+  border:none;cursor:pointer;font-size:16px;color:var(--text)}
+
+/* MAP */
+#map-screen{z-index:20}
+#map{position:absolute;inset:0;width:100%;height:100%}
+.leaflet-control-zoom,.leaflet-control-attribution{display:none}
+#map-ui{position:absolute;inset:0;pointer-events:none}
+#map-ui>*{pointer-events:all}
+#map-top{position:absolute;top:0;left:0;right:0;padding:52px 14px 0;
+  display:flex;justify-content:space-between;align-items:flex-start}
+.mlogo{background:rgba(7,7,16,.9);border:1px solid var(--border);border-radius:12px;
+  padding:8px 14px;display:flex;align-items:center;gap:8px;backdrop-filter:blur(20px)}
+.mdot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.mdot.rec{background:var(--red);animation:pulse 1.5s infinite}
+.mact{display:flex;gap:8px}
+.mibtn{width:42px;height:42px;background:rgba(7,7,16,.9);border:1px solid var(--border);
+  border-radius:12px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;backdrop-filter:blur(20px);font-size:18px}
+#map-status{position:absolute;top:108px;left:50%;transform:translateX(-50%);
+  background:rgba(7,7,16,.9);border:1px solid var(--border);border-radius:30px;
+  padding:6px 16px;font-size:12px;color:var(--text2);backdrop-filter:blur(20px);white-space:nowrap}
+#map-status.active{border-color:var(--green);color:var(--green)}
+#map-status.wait{border-color:var(--warn);color:var(--warn)}
+#trip-stats{position:absolute;bottom:100px;left:14px;right:14px;
+  background:rgba(7,7,16,.9);border:1px solid var(--border);border-radius:16px;
+  padding:12px 16px;display:none;backdrop-filter:blur(20px)}
+#trip-stats.show{display:flex}
+.stat{flex:1;text-align:center}
+.sval{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:600}
+.slbl{font-size:9px;color:var(--text2);margin-top:2px;text-transform:uppercase;letter-spacing:.8px}
+.sdiv{width:1px;background:var(--border);margin:0 8px}
+#main-btn-wrap{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);
+  display:flex;flex-direction:column;align-items:center;gap:8px}
+#main-btn{width:190px;height:52px;border-radius:26px;border:none;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;
+  font-family:'Sora',sans-serif;font-size:15px;font-weight:700;cursor:pointer;
+  box-shadow:0 6px 24px rgba(108,142,255,.4);display:flex;align-items:center;justify-content:center;gap:8px}
+#main-btn.rec{background:linear-gradient(135deg,#b02020,var(--red))}
+#locate-btn{position:absolute;bottom:24px;right:14px;width:50px;height:50px;
+  border-radius:16px;background:rgba(7,7,16,.9);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:22px}
+.gs-dot{width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid #fff}
+.gs-dot.first{background:var(--green)}.gs-dot.last{background:var(--red)}
+.userdot{width:16px;height:16px;border-radius:50%;background:var(--accent);
+  border:3px solid #fff;box-shadow:0 0 0 4px rgba(108,142,255,.25)}
+.fav-mk{font-size:22px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))}
+.leaflet-popup-content-wrapper{background:rgba(20,20,40,.95)!important;border:1px solid var(--border)!important;
+  border-radius:12px!important;color:var(--text)!important}
+.leaflet-popup-tip{background:rgba(20,20,40,.95)!important}
+.leaflet-popup-content{font-family:'Sora',sans-serif!important;font-size:13px!important;margin:10px 14px!important}
+.pop-t{font-weight:700;margin-bottom:4px}.pop-s{font-size:11px;color:var(--text2)}
+
+/* PANELS / MODALS */
+.map-modal{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;
+  display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(8px)}
+.map-modal.open{display:flex}
+.map-modal-inner{background:#13131f;border:1px solid var(--border);border-radius:24px 24px 0 0;
+  padding:20px 16px 36px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto}
+.mm-title{font-size:16px;font-weight:700;margin-bottom:14px;text-align:center}
+.mm-icons{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;justify-content:center}
+.mm-icon{width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.07);
+  border:2px solid transparent;font-size:22px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center}
+.mm-icon.sel{border-color:var(--accent);background:rgba(108,142,255,.15)}
+.mm-input{width:100%;background:rgba(255,255,255,.07);border:1px solid var(--border);
+  border-radius:12px;padding:12px 14px;font-family:'Sora',sans-serif;font-size:14px;
+  color:var(--text);outline:none;margin-bottom:10px;display:block}
+.mm-input:focus{border-color:var(--accent)}
+.side-panel{position:fixed;inset:0;background:var(--bg);z-index:50;display:none;flex-direction:column}
+.side-panel.open{display:flex}
+.sp-header{padding:52px 16px 14px;display:flex;align-items:center;gap:12px;
+  border-bottom:1px solid var(--border);flex-shrink:0}
+.sp-title{font-size:18px;font-weight:700;flex:1}
+.sp-close{width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.07);
+  border:none;cursor:pointer;font-size:18px;color:var(--text);
+  display:flex;align-items:center;justify-content:center}
+.sp-body{flex:1;overflow-y:auto;padding:16px}
+.sp-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+.sp-tab{flex:1;padding:10px;text-align:center;font-size:13px;font-weight:600;
+  color:var(--text2);cursor:pointer;border-bottom:2px solid transparent}
+.sp-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.trip-card{background:rgba(255,255,255,.05);border:1px solid var(--border);
+  border-radius:14px;padding:14px;margin-bottom:10px;cursor:pointer}
+.trip-card-head{display:flex;justify-content:space-between;margin-bottom:8px}
+.trip-name{font-size:14px;font-weight:700}.trip-date{font-size:11px;color:var(--text2)}
+.trip-meta{display:flex;gap:16px;flex-wrap:wrap}
+.trip-meta span{font-size:12px;color:var(--text2)}.trip-meta b{color:var(--text);font-weight:600}
+.fav-card{background:rgba(255,255,255,.05);border:1px solid var(--border);
+  border-radius:14px;padding:12px;margin-bottom:10px;display:flex;align-items:center;gap:12px}
+.fav-ico{font-size:22px;width:42px;height:42px;background:rgba(255,255,255,.07);
+  border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fav-info{flex:1;min-width:0}
+.fav-name{font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fav-coord{font-size:10px;color:var(--text2)}
+.fav-acts{display:flex;gap:6px}
+.fav-act{width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,.07);
+  border:1px solid var(--border);cursor:pointer;font-size:13px;
+  display:flex;align-items:center;justify-content:center}
+.no-items{text-align:center;color:var(--text2);font-size:14px;padding:40px 0}
+
+/* NOTES */
+#notes-screen{position:fixed;inset:0;background:var(--bg);z-index:20;display:none;flex-direction:column}
+#notes-screen.open{display:flex}
+.ns-header{padding:52px 16px 10px;display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid var(--border);flex-shrink:0}
+.ns-title{font-size:18px;font-weight:700;flex:1}
+.ns-search-wrap{padding:10px 16px;position:relative;flex-shrink:0}
+.ns-search{width:100%;background:rgba(255,255,255,.07);border:1px solid var(--border);
+  border-radius:12px;padding:10px 14px 10px 36px;font-family:'Sora',sans-serif;
+  font-size:14px;color:var(--text);outline:none}
+.ns-search:focus{border-color:var(--accent)}
+.ns-search-ico{position:absolute;left:26px;top:50%;transform:translateY(-50%);
+  font-size:14px;color:var(--text2);pointer-events:none}
+#notes-tag-bar{padding:0 12px 8px;display:flex;gap:6px;overflow-x:auto;flex-shrink:0}
+#notes-tag-bar::-webkit-scrollbar{display:none}
+.tag-chip{padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;
+  background:rgba(255,255,255,.07);border:1px solid var(--border);
+  color:var(--text2);cursor:pointer;white-space:nowrap;flex-shrink:0}
+.tag-chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.ns-body{flex:1;overflow-y:auto;padding:0 10px 20px}
+.ns-body::-webkit-scrollbar{display:none}
+#notes-grid{columns:2;column-gap:10px;margin-top:10px}
+.note-card{break-inside:avoid;margin-bottom:10px;border-radius:16px;
+  border:1px solid var(--border);padding:12px;cursor:pointer;position:relative;transition:transform .15s}
+.note-card:active{transform:scale(.97)}
+.note-card.pinned::before{content:'📌';position:absolute;top:8px;right:8px;font-size:12px}
+.note-title{font-size:14px;font-weight:700;margin-bottom:6px;
+  overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.note-preview{font-size:12px;color:var(--text2);line-height:1.5;
+  overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}
+.note-footer{display:flex;align-items:center;justify-content:space-between;margin-top:8px}
+.note-tags{display:flex;gap:4px;flex-wrap:wrap}
+.ntag{font-size:10px;padding:2px 7px;border-radius:10px;
+  background:rgba(108,142,255,.15);color:var(--accent)}
+.note-date{font-size:10px;color:var(--text3)}
+#notes-fab{position:fixed;bottom:28px;right:16px;z-index:30;
+  width:52px;height:52px;border-radius:18px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border:none;color:#fff;font-size:26px;cursor:pointer;
+  box-shadow:0 6px 24px rgba(108,142,255,.4);
+  display:none;align-items:center;justify-content:center}
+#notes-fab.visible{display:flex}
+#note-editor{position:fixed;inset:0;z-index:40;background:var(--bg);display:none;flex-direction:column}
+#note-editor.open{display:flex}
+.ed-header{padding:52px 14px 12px;display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid var(--border);flex-shrink:0}
+#ed-back{width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,.07);
+  border:none;cursor:pointer;font-size:18px;color:var(--text)}
+#ed-title{flex:1;background:none;border:none;font-family:'Sora',sans-serif;
+  font-size:18px;font-weight:700;color:var(--text);outline:none}
+.ed-actions{display:flex;gap:6px}
+.ed-btn{width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.07);
+  border:none;cursor:pointer;font-size:16px;color:var(--text2)}
+.ed-btn.on{background:rgba(108,142,255,.2);color:var(--accent)}
+#color-bar{display:none;padding:8px 14px;gap:8px;overflow-x:auto;
+  border-bottom:1px solid var(--border);flex-shrink:0}
+.cswatch{width:28px;height:28px;border-radius:50%;cursor:pointer;flex-shrink:0;border:3px solid transparent}
+.cswatch.sel{border-color:#fff}
+#tag-bar-ed{display:none;padding:8px 16px;gap:6px;align-items:center;
+  border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+.ed-tag{font-size:11px;padding:4px 10px;border-radius:20px;
+  background:rgba(108,142,255,.15);color:var(--accent);display:flex;align-items:center;gap:4px}
+#ed-tag-inp{background:none;border:none;font-family:'Sora',sans-serif;font-size:13px;color:var(--text);outline:none;min-width:100px}
+.ed-body{flex:1;overflow-y:auto;padding:14px}
+.ed-body::-webkit-scrollbar{display:none}
+#ed-text{min-height:200px;background:none;border:none;font-family:'Sora',sans-serif;
+  font-size:15px;color:var(--text);outline:none;resize:none;width:100%;line-height:1.8}
+.nb{margin-bottom:14px}
+.nb-checklist{background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:14px;padding:12px}
+.ci{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.ci:last-of-type{border-bottom:none}
+.ci-box{width:20px;height:20px;border-radius:6px;border:2px solid var(--border);
+  cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.ci-box.on{background:var(--accent);border-color:var(--accent)}
+.ci-box.on::after{content:'✓';font-size:12px;color:#fff;font-weight:700}
+.ci-text{flex:1;background:none;border:none;font-family:'Sora',sans-serif;font-size:14px;color:var(--text);outline:none}
+.ci-text.done{text-decoration:line-through;color:var(--text3)}
+.ci-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px}
+.add-ci{width:100%;padding:8px;background:none;border:1px dashed var(--border);
+  border-radius:10px;color:var(--text2);font-family:'Sora',sans-serif;font-size:13px;cursor:pointer;margin-top:8px}
+.nb-divider{border:none;border-top:1px solid rgba(255,255,255,.08);margin:8px 0}
+.nb-tool{padding:5px 10px;border-radius:20px;background:rgba(255,255,255,.07);
+  border:1px solid var(--border);font-size:11px;color:var(--text2);cursor:pointer;font-family:'Sora',sans-serif}
+.nb-tool.danger{color:var(--red)}
+.ed-fabs{padding:10px 14px;display:flex;gap:8px;border-top:1px solid var(--border);flex-shrink:0;overflow-x:auto}
+.ed-fabs::-webkit-scrollbar{display:none}
+.ed-fab{padding:9px 14px;border-radius:20px;background:rgba(255,255,255,.07);
+  border:1px solid var(--border);font-size:12px;color:var(--text2);cursor:pointer;
+  white-space:nowrap;font-family:'Sora',sans-serif;display:flex;align-items:center;gap:5px;flex-shrink:0}
+
+/* CHAT */
+#chat-screen{position:fixed;inset:0;background:var(--bg);z-index:20;display:none;flex-direction:column}
+#chat-screen.open{display:flex}
+.chat-ph{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;text-align:center;color:var(--text2)}
+.coming{background:rgba(255,110,180,.15);border:1px solid rgba(255,110,180,.3);
+  color:#ff6eb4;font-size:12px;font-weight:700;padding:6px 16px;border-radius:20px;margin-top:16px}
+
+/* SETTINGS */
+#settings-screen{position:fixed;inset:0;background:var(--bg);z-index:20;display:none;flex-direction:column;overflow-y:auto}
+#settings-screen.open{display:flex}
+.s-body{padding:16px}
+.s-group{margin-bottom:24px}
+.s-group-title{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text2);margin-bottom:10px}
+.s-row{background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.s-item{padding:14px 16px;display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border);cursor:pointer}
+.s-item:last-child{border-bottom:none}
+.s-label{font-size:14px}.s-sub{font-size:11px;color:var(--text2);margin-top:2px}
+.toggle{width:48px;height:28px;border-radius:14px;background:rgba(255,255,255,.1);
+  border:1px solid var(--border);position:relative;cursor:pointer;transition:background .3s}
+.toggle.on{background:var(--accent);border-color:var(--accent)}
+.toggle::after{content:'';position:absolute;width:20px;height:20px;border-radius:50%;
+  background:#fff;top:3px;left:3px;transition:left .3s;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.toggle.on::after{left:25px}
+.segment{display:flex;background:rgba(255,255,255,.07);border-radius:10px;padding:3px;gap:2px}
+.seg-opt{flex:1;padding:7px 10px;border-radius:8px;text-align:center;font-size:13px;
+  cursor:pointer;color:var(--text2);font-weight:500;user-select:none}
+.seg-opt.active{background:var(--accent);color:#fff;font-weight:700}
+
+/* CALENDAR */
+#calendar-screen{position:fixed;inset:0;background:var(--bg);z-index:20;display:none;flex-direction:column}
+#calendar-screen.open{display:flex}
+.cal-nav-btn{width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.07);
+  border:1px solid var(--border);color:var(--text);font-size:20px;cursor:pointer}
+.cal-day-hdr{text-align:center;font-size:10px;font-weight:700;color:var(--text2);
+  padding:6px 0;text-transform:uppercase;letter-spacing:.5px}
+.cal-cell{min-height:52px;border-radius:10px;padding:4px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;transition:background .15s}
+.cal-cell:active{background:rgba(255,255,255,.08)}
+.cal-cell.empty{cursor:default}
+.cal-cell.today{background:rgba(108,142,255,.1)}
+.cal-day-num{font-size:13px;font-weight:600;margin-bottom:3px;
+  width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.cal-day-num.today{background:var(--accent);color:#fff;font-weight:800}
+.cal-dots{display:flex;gap:3px;flex-wrap:wrap;justify-content:center}
+.cal-dot{width:6px;height:6px;border-radius:50%}
+.cal-event-item{display:flex;align-items:center;gap:10px;padding:12px 14px;
+  background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:12px;
+  margin-bottom:8px;cursor:pointer}
+.cal-event-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.cal-event-info{flex:1;min-width:0}
+.cal-event-title{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-event-meta{font-size:11px;color:var(--text2);margin-top:2px}
+.cal-event-del{font-size:14px;color:var(--text3);cursor:pointer;padding:4px;flex-shrink:0}
+.cal-link-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;
+  border-radius:20px;background:rgba(108,142,255,.15);color:var(--accent);font-size:13px}
+.cal-link-remove{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;margin-left:4px}
+.cal-link-add{padding:7px 14px;border-radius:20px;background:rgba(255,255,255,.07);
+  border:1px dashed var(--border);color:var(--text2);font-family:'Sora',sans-serif;font-size:13px;cursor:pointer}
+.cal-pick-item{padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;font-size:14px}
+.cal-pick-item:last-child{border-bottom:none}
+.cal-pick-item:active{background:rgba(255,255,255,.07)}
+
+/* ANIMATIONS */
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+</style>
+</head>
+<body>
+
+<!-- ERROR BANNER -->
+<div id="err"></div>
+
+<!-- BOOT LOADER — visibile durante l'inizializzazione -->
+<div id="boot-loader">
+  <div class="boot-icon">🌱</div>
+  <div class="boot-label">MY LIFE · AVVIO...</div>
+</div>
+
+<!-- AUTH SCREEN — contiene lock, setup, recovery -->
+<div id="auth-screen">
+
+  <!-- STEP LOCK: schermata PIN di sblocco -->
+  <div class="step" id="step-lock">
+    <div class="brand">
+      <div class="brand-icon">🌱</div>
+      <div class="brand-name">My Life</div>
+      <div class="brand-sub" id="lock-sub">La tua privacy, sulla chain, per sempre</div>
+    </div>
+    <div class="pin-dots" id="lock-dots">
+      <div class="dot" id="d0"></div><div class="dot" id="d1"></div>
+      <div class="dot" id="d2"></div><div class="dot" id="d3"></div>
+      <div class="dot" id="d4"></div><div class="dot" id="d5"></div>
+    </div>
+    <div class="pin-pad">
+      <div class="key" data-fn="lockKey" data-v="1">1</div>
+      <div class="key" data-fn="lockKey" data-v="2">2<div class="key-sub">ABC</div></div>
+      <div class="key" data-fn="lockKey" data-v="3">3<div class="key-sub">DEF</div></div>
+      <div class="key" data-fn="lockKey" data-v="4">4<div class="key-sub">GHI</div></div>
+      <div class="key" data-fn="lockKey" data-v="5">5<div class="key-sub">JKL</div></div>
+      <div class="key" data-fn="lockKey" data-v="6">6<div class="key-sub">MNO</div></div>
+      <div class="key" data-fn="lockKey" data-v="7">7<div class="key-sub">PQRS</div></div>
+      <div class="key" data-fn="lockKey" data-v="8">8<div class="key-sub">TUV</div></div>
+      <div class="key" data-fn="lockKey" data-v="9">9<div class="key-sub">WXYZ</div></div>
+      <div class="key empty"></div>
+      <div class="key" data-fn="lockKey" data-v="0">0</div>
+      <div class="key" data-fn="lockDel">⌫</div>
+    </div>
+    <div class="lock-links">
+      <span class="llink" onclick="showRecovery()">Non ricordo il PIN</span>
+      <span class="llink small" data-intent="INTENT_RESET_SYSTEM">Cancella tutto e ricomincia</span>
+    </div>
+  </div>
+
+  <!-- STEP SETUP: wizard primo avvio -->
+  <div class="step" id="step-setup" style="overflow-y:auto;max-height:100dvh;padding-top:20px">
+
+    <!-- step-welcome -->
+    <div class="step" id="step-welcome" style="display:flex">
+      <div class="wiz-icon">🌱</div>
+      <div class="wiz-title">Benvenuto in My Life</div>
+      <div class="wiz-sub">La tua vita, tua. Privacy sulla chain, per sempre.</div>
+      <button class="btn" onclick="showWizStep('step-pin')">Crea il tuo PIN →</button>
+    </div>
+
+    <!-- step-pin -->
+    <div class="step" id="step-pin">
+      <div class="wiz-icon">🔢</div>
+      <div class="wiz-title">Scegli un PIN</div>
+      <div class="wiz-sub" id="pin-sub">6 cifre. Lo userai ogni volta che apri l'app.</div>
+      <div class="pin-dots" id="setup-dots">
+        <div class="dot" id="s0"></div><div class="dot" id="s1"></div>
+        <div class="dot" id="s2"></div><div class="dot" id="s3"></div>
+        <div class="dot" id="s4"></div><div class="dot" id="s5"></div>
+      </div>
+      <div class="pin-pad">
+        <div class="key" data-fn="setupKey" data-v="1">1</div>
+        <div class="key" data-fn="setupKey" data-v="2">2</div>
+        <div class="key" data-fn="setupKey" data-v="3">3</div>
+        <div class="key" data-fn="setupKey" data-v="4">4</div>
+        <div class="key" data-fn="setupKey" data-v="5">5</div>
+        <div class="key" data-fn="setupKey" data-v="6">6</div>
+        <div class="key" data-fn="setupKey" data-v="7">7</div>
+        <div class="key" data-fn="setupKey" data-v="8">8</div>
+        <div class="key" data-fn="setupKey" data-v="9">9</div>
+        <div class="key empty"></div>
+        <div class="key" data-fn="setupKey" data-v="0">0</div>
+        <div class="key" data-fn="setupDel">⌫</div>
+      </div>
+    </div>
+
+    <!-- step-confirm -->
+    <div class="step" id="step-confirm">
+      <div class="wiz-icon">✅</div>
+      <div class="wiz-title">Conferma PIN</div>
+      <div class="wiz-sub" id="confirm-sub">Inseriscilo di nuovo.</div>
+      <div class="pin-dots" id="confirm-dots">
+        <div class="dot" id="c0"></div><div class="dot" id="c1"></div>
+        <div class="dot" id="c2"></div><div class="dot" id="c3"></div>
+        <div class="dot" id="c4"></div><div class="dot" id="c5"></div>
+      </div>
+      <div class="pin-pad">
+        <div class="key" data-fn="confirmKey" data-v="1">1</div>
+        <div class="key" data-fn="confirmKey" data-v="2">2</div>
+        <div class="key" data-fn="confirmKey" data-v="3">3</div>
+        <div class="key" data-fn="confirmKey" data-v="4">4</div>
+        <div class="key" data-fn="confirmKey" data-v="5">5</div>
+        <div class="key" data-fn="confirmKey" data-v="6">6</div>
+        <div class="key" data-fn="confirmKey" data-v="7">7</div>
+        <div class="key" data-fn="confirmKey" data-v="8">8</div>
+        <div class="key" data-fn="confirmKey" data-v="9">9</div>
+        <div class="key empty"></div>
+        <div class="key" data-fn="confirmKey" data-v="0">0</div>
+        <div class="key" data-fn="confirmDel">⌫</div>
+      </div>
+    </div>
+
+    <!-- step-phrase: 12 parole -->
+    <div class="step" id="step-phrase" style="overflow-y:auto;max-height:100dvh;padding-top:20px">
+      <div class="wiz-icon">📝</div>
+      <div class="wiz-title">Le tue 12 parole</div>
+      <div class="warn-box">⚠️ Scrivile su carta adesso. Sono l'unico modo per recuperare i tuoi dati se perdi il telefono.</div>
+      <div class="phrase-grid" id="phrase-grid"></div>
+      <button class="btn" onclick="showWizStep('step-verify')">Le ho scritte →</button>
+    </div>
+
+    <!-- step-verify -->
+    <div class="step" id="step-verify">
+      <div class="wiz-icon">🧠</div>
+      <div class="wiz-title">Verifica</div>
+      <div class="wiz-sub">Inserisci le parole richieste.</div>
+      <div id="verify-grid" style="width:100%;max-width:340px;margin-bottom:20px"></div>
+      <button class="btn" id="verify-btn" onclick="finishSetup()" disabled>Entra →</button>
+      <button class="btn-ghost" onclick="showWizStep('step-phrase')">← Torna alle parole</button>
+    </div>
+  </div>
+
+  <!-- STEP RECOVERY: inserisci 12 parole -->
+  <div class="step" id="step-recovery" style="overflow-y:auto;max-height:100dvh;padding:52px 0 24px">
+    <div style="font-size:44px;margin-bottom:12px">🔑</div>
+    <div id="rec-title" style="font-size:20px;font-weight:800;margin-bottom:8px;text-align:center">Recupero accesso</div>
+    <div id="rec-sub" style="font-size:14px;color:var(--text2);margin-bottom:20px;text-align:center;line-height:1.6">
+      Inserisci le 12 parole di backup.
+    </div>
+    <div id="rec-grid" style="width:100%;max-width:340px"></div>
+    <div style="width:100%;max-width:340px;margin-top:10px">
+      <button class="btn" onclick="doRecovery()">Recupera accesso →</button>
+      <div id="rec-err" style="font-size:12px;text-align:center;margin-top:8px;min-height:18px;color:var(--red)"></div>
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);text-align:center">
+        <span class="llink small" data-intent="INTENT_RESET_SYSTEM">Cancella tutto e ricomincia</span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /auth-screen -->
+
+<!-- HOME SCREEN -->
+<div class="screen" id="home-screen">
+  <div class="home-header">
+    <div>
+      <div class="home-title">🌱 My Life</div>
+      <div class="home-time" id="home-time"></div>
+    </div>
+    <button class="lock-btn" data-intent="INTENT_LOCK_APP">🔒</button>
+  </div>
+  <div class="widgets">
+    <div class="widget w-map" onclick="openMap()">
+      <div class="w-icon">🗺</div><div class="w-name">Mappa</div>
+      <div class="w-desc">GPS · Localizzami · Preferiti · Import Google</div>
+      <span class="w-badge">● LIVE</span>
+    </div>
+    <div class="w-row">
+      <div class="widget w-notes" onclick="openNotes()">
+        <div class="w-icon">📓</div><div class="w-name">Note</div>
+        <div class="w-desc">Scrivi e organizza</div>
+        <span class="w-badge" id="w-notes-badge">0 note</span>
+      </div>
+      <div class="widget w-cal" onclick="openCalendar()">
+        <div class="w-icon">📅</div><div class="w-name">Calendario</div>
+        <div class="w-desc">Appuntamenti · Note · Luoghi</div>
+        <span class="w-badge" id="w-cal-badge">0 eventi</span>
+      </div>
+    </div>
+    <div class="w-row">
+      <div class="widget w-settings" onclick="openSettings()">
+        <div class="w-icon">⚙️</div><div class="w-name">Impostazioni</div>
+        <div class="w-desc">GPS · Backup · Sicurezza</div>
+      </div>
+      <div class="widget w-chat" onclick="openChat()">
+        <div class="w-icon">💬</div><div class="w-name">Chat</div>
+        <div class="w-desc">P2P · MetaMask</div>
+        <span class="w-badge">M1.3</span>
+      </div>
+    </div>
+    <div style="text-align:center;padding:8px 0;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3)">
+      My Life v4.0 · AES-256-GCM · Local-First
+    </div>
+  </div>
+</div>
+
+<!-- MAP SCREEN -->
+<div class="screen" id="map-screen">
+  <div id="map"></div>
+  <div id="map-ui">
+    <div id="map-top">
+      <div class="mlogo">
+        <div class="mdot" id="mdot"></div>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:12px">My Life · Mappa</span>
+      </div>
+      <div class="mact">
+        <div class="mibtn" onclick="window.MapModule?.openPanel()">📋</div>
+        <div class="mibtn" id="fav-toggle-btn" onclick="window.MapModule?.toggleFav()">⭐</div>
+        <div class="mibtn" onclick="document.getElementById('import-in').click()">📥</div>
+        <div class="mibtn" onclick="closeSection('map-screen')">🏠</div>
+      </div>
+    </div>
+    <div id="map-status">Pronto</div>
+    <div id="trip-stats">
+      <div class="stat"><div class="sval" id="s-pts">0</div><div class="slbl">Punti</div></div>
+      <div class="sdiv"></div>
+      <div class="stat"><div class="sval" id="s-dist">0m</div><div class="slbl">Distanza</div></div>
+      <div class="sdiv"></div>
+      <div class="stat"><div class="sval" id="s-time">00:00</div><div class="slbl">Durata</div></div>
+    </div>
+    <div id="main-btn-wrap">
+      <div id="gps-acc" style="font-size:11px;color:var(--text2)"></div>
+      <button id="main-btn" onclick="window.MapModule?.toggleTrip()">
+        <span id="btn-icon">▶</span><span id="btn-label">Inizia viaggio</span>
+      </button>
+    </div>
+    <div id="locate-btn" onclick="window.MapModule?.locateMe()">📍</div>
+  </div>
+</div>
+
+<!-- MAP MODAL PREFERITI -->
+<div class="map-modal" id="fav-modal">
+  <div class="map-modal-inner">
+    <div class="mm-title">⭐ Nuovo luogo preferito</div>
+    <div class="mm-icons">
+      <div class="mm-icon sel" data-i="📍" onclick="window.MapModule?.selIcon(this)">📍</div>
+      <div class="mm-icon" data-i="🏠" onclick="window.MapModule?.selIcon(this)">🏠</div>
+      <div class="mm-icon" data-i="🏢" onclick="window.MapModule?.selIcon(this)">🏢</div>
+      <div class="mm-icon" data-i="🍕" onclick="window.MapModule?.selIcon(this)">🍕</div>
+      <div class="mm-icon" data-i="☕" onclick="window.MapModule?.selIcon(this)">☕</div>
+      <div class="mm-icon" data-i="🏖" onclick="window.MapModule?.selIcon(this)">🏖</div>
+      <div class="mm-icon" data-i="🏔" onclick="window.MapModule?.selIcon(this)">🏔</div>
+      <div class="mm-icon" data-i="❤️" onclick="window.MapModule?.selIcon(this)">❤️</div>
+    </div>
+    <input class="mm-input" id="fav-name-in" placeholder="Nome del luogo..." maxlength="60">
+    <input class="mm-input" id="fav-note-in" placeholder="Nota (opzionale)..." maxlength="120">
+    <button class="btn" onclick="window.MapModule?.saveFav()">Salva</button>
+    <button class="btn-ghost" onclick="window.MapModule?.closeFavModal()">Annulla</button>
+  </div>
+</div>
+
+<!-- TRIPS/FAV PANEL -->
+<div class="side-panel" id="trips-panel">
+  <div class="sp-header">
+    <div class="sp-title">Esplora</div>
+    <button class="sp-close" onclick="window.MapModule?.closePanel()">✕</button>
+  </div>
+  <div class="sp-tabs">
+    <div class="sp-tab active" id="sptab-trips" onclick="window.MapModule?.switchTab('trips')">🗺 Viaggi</div>
+    <div class="sp-tab" id="sptab-favs" onclick="window.MapModule?.switchTab('favs')">⭐ Preferiti</div>
+  </div>
+  <div class="sp-body" id="trips-body"></div>
+</div>
+
+<!-- NOTES SCREEN -->
+<div id="notes-screen">
+  <div class="ns-header">
+    <button class="sp-close" onclick="closeSection('notes-screen')">←</button>
+    <div class="ns-title">📓 Note</div>
+  </div>
+  <div class="ns-search-wrap">
+    <span class="ns-search-ico">🔍</span>
+    <input class="ns-search" id="notes-search" placeholder="Cerca..." oninput="window.NotesModule?.render()">
+  </div>
+  <div id="notes-tag-bar"></div>
+  <div class="ns-body"><div id="notes-grid"></div></div>
+</div>
+<button id="notes-fab" onclick="window.NotesModule?.openEditor(null)">＋</button>
+
+<!-- NOTE EDITOR -->
+<div id="note-editor">
+  <div class="ed-header">
+    <button id="ed-back" onclick="window.NotesModule?.closeEditor()">←</button>
+    <input id="ed-title" placeholder="Titolo...">
+    <div class="ed-actions">
+      <button class="ed-btn" id="ed-pin" onclick="window.NotesModule?.togglePin()">📌</button>
+      <button class="ed-btn" onclick="window.NotesModule?.toggleColorBar()">🎨</button>
+      <button class="ed-btn" onclick="window.NotesModule?.toggleTagBar()">🏷</button>
+      <button class="ed-btn" onclick="window.NotesModule?.deleteNote()" style="color:var(--red)">🗑</button>
+    </div>
+  </div>
+  <div id="color-bar">
+    <div class="cswatch sel" style="background:rgba(255,255,255,.15)" onclick="window.NotesModule?.setColor('default',this)"></div>
+    <div class="cswatch" style="background:#c0392b" onclick="window.NotesModule?.setColor('red',this)"></div>
+    <div class="cswatch" style="background:#e67e22" onclick="window.NotesModule?.setColor('orange',this)"></div>
+    <div class="cswatch" style="background:#f1c40f" onclick="window.NotesModule?.setColor('yellow',this)"></div>
+    <div class="cswatch" style="background:#27ae60" onclick="window.NotesModule?.setColor('green',this)"></div>
+    <div class="cswatch" style="background:#2980b9" onclick="window.NotesModule?.setColor('blue',this)"></div>
+    <div class="cswatch" style="background:#8e44ad" onclick="window.NotesModule?.setColor('purple',this)"></div>
+    <div class="cswatch" style="background:#e91e8c" onclick="window.NotesModule?.setColor('pink',this)"></div>
+  </div>
+  <div id="tag-bar-ed">
+    <div id="ed-current-tags"></div>
+    <input id="ed-tag-inp" placeholder="Aggiungi tag..." onkeydown="window.NotesModule?.onTagKey(event)">
+  </div>
+  <div class="ed-body">
+    <div id="ed-blocks"></div>
+    <textarea id="ed-text" placeholder="Inizia a scrivere..."></textarea>
+  </div>
+  <div class="ed-fabs">
+    <button class="ed-fab" onclick="window.NotesModule?.addChecklist()">☑ Checklist</button>
+    <button class="ed-fab" onclick="window.NotesModule?.addDivider()">— Separatore</button>
+  </div>
+</div>
+
+<!-- CHAT SCREEN -->
+<div id="chat-screen">
+  <div class="sp-header">
+    <button class="sp-close" onclick="closeSection('chat-screen')">←</button>
+    <div class="sp-title">💬 Chat</div>
+  </div>
+  <div class="chat-ph">
+    <div style="font-size:48px;opacity:.4;margin-bottom:16px">💬</div>
+    <div style="font-size:18px;font-weight:700;color:var(--text);opacity:.6">Chat P2P</div>
+    <div style="font-size:13px;line-height:1.6;margin-top:8px">Messaggi cifrati · Gruppi · MetaMask</div>
+    <div class="coming">M1.3 — In sviluppo</div>
+  </div>
+</div>
+
+<!-- SETTINGS SCREEN -->
+<div id="settings-screen">
+  <div class="sp-header">
+    <button class="sp-close" onclick="closeSection('settings-screen')">←</button>
+    <div class="sp-title">⚙️ Impostazioni</div>
+  </div>
+  <div class="s-body">
+    <div class="s-group">
+      <div class="s-group-title">GPS</div>
+      <div class="s-row">
+        <div class="s-item" onclick="window.MapModule?.toggleAuto()">
+          <div><div class="s-label">Registrazione automatica</div>
+            <div class="s-sub">Senza conferma</div></div>
+          <div class="toggle" id="tog-auto"></div>
+        </div>
+        <div class="s-item" style="cursor:default">
+          <div class="segment">
+            <div class="seg-opt" data-v="low" onclick="window.MapModule?.setSens('low')">Bassa</div>
+            <div class="seg-opt active" data-v="medium" onclick="window.MapModule?.setSens('medium')">Media</div>
+            <div class="seg-opt" data-v="high" onclick="window.MapModule?.setSens('high')">Alta</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="s-group">
+      <div class="s-group-title">Sicurezza</div>
+      <div class="s-row">
+        <div class="s-item" data-intent="INTENT_LOCK_APP">
+          <div class="s-label">Blocca app</div><span style="color:var(--accent)">🔒</span>
+        </div>
+      </div>
+    </div>
+    <div class="s-group">
+      <div class="s-group-title">Dati</div>
+      <div class="s-row">
+        <div class="s-item" data-intent="INTENT_RESET_SYSTEM">
+          <div class="s-label" style="color:var(--red)">Cancella tutti i dati</div>
+          <span style="color:var(--red)">✕</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CALENDAR SCREEN -->
+<div id="calendar-screen">
+  <div class="sp-header">
+    <button class="sp-close" onclick="closeSection('calendar-screen')">←</button>
+    <div class="sp-title">📅 Calendario</div>
+    <button class="sp-close" onclick="window.CalendarModule?.openEventForm(null,null)">＋</button>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;flex-shrink:0">
+    <button class="cal-nav-btn" onclick="window.CalendarModule?.prevMonth()">‹</button>
+    <div id="cal-month-title" style="font-size:17px;font-weight:700"></div>
+    <button class="cal-nav-btn" onclick="window.CalendarModule?.nextMonth()">›</button>
+  </div>
+  <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:0 8px;flex-shrink:0"></div>
+  <div style="flex:1;overflow-y:auto;padding:12px 16px">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text2);margin-bottom:8px">Appuntamenti</div>
+    <div id="cal-event-list"></div>
+  </div>
+</div>
+
+<!-- CAL EVENT FORM -->
+<div class="side-panel" id="cal-event-form">
+  <div class="sp-header">
+    <div class="sp-title">📅 Appuntamento</div>
+    <button class="sp-close" onclick="window.CalendarModule?.closeEventForm()">✕</button>
+  </div>
+  <div class="sp-body">
+    <input class="mm-input" id="cal-ev-title" placeholder="Titolo..." maxlength="80">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <input class="mm-input" id="cal-ev-date" type="date" style="margin:0">
+      <input class="mm-input" id="cal-ev-time" type="time" style="margin:0">
+    </div>
+    <textarea class="mm-input" id="cal-ev-notes" placeholder="Note..." style="height:80px;resize:none;margin-bottom:10px"></textarea>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <span style="font-size:13px;color:var(--text2)">Colore:</span>
+      <input type="color" id="cal-ev-color" value="#6c8eff"
+        style="width:36px;height:36px;border-radius:50%;border:2px solid var(--border);cursor:pointer">
+      <div style="display:flex;gap:6px">
+        <div style="width:24px;height:24px;border-radius:50%;background:#6c8eff;cursor:pointer" onclick="document.getElementById('cal-ev-color').value='#6c8eff'"></div>
+        <div style="width:24px;height:24px;border-radius:50%;background:#34d69e;cursor:pointer" onclick="document.getElementById('cal-ev-color').value='#34d69e'"></div>
+        <div style="width:24px;height:24px;border-radius:50%;background:#ff5555;cursor:pointer" onclick="document.getElementById('cal-ev-color').value='#ff5555'"></div>
+        <div style="width:24px;height:24px;border-radius:50%;background:#ffb340;cursor:pointer" onclick="document.getElementById('cal-ev-color').value='#ffb340'"></div>
+        <div style="width:24px;height:24px;border-radius:50%;background:#9b7fff;cursor:pointer" onclick="document.getElementById('cal-ev-color').value='#9b7fff'"></div>
+      </div>
+    </div>
+    <div style="margin-bottom:10px">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Nota collegata</div>
+      <div id="cal-linked-note"></div>
+      <div id="cal-note-picker" style="display:none;background:rgba(20,20,40,.98);border:1px solid var(--border);border-radius:12px;margin-top:6px;max-height:160px;overflow-y:auto"></div>
+    </div>
+    <div style="margin-bottom:20px">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Luogo collegato</div>
+      <div id="cal-linked-place"></div>
+      <div id="cal-place-picker" style="display:none;background:rgba(20,20,40,.98);border:1px solid var(--border);border-radius:12px;margin-top:6px;max-height:160px;overflow-y:auto"></div>
+    </div>
+    <button class="btn" onclick="window.CalendarModule?.saveEvent()">Salva appuntamento</button>
+    <button class="btn-ghost" onclick="window.CalendarModule?.closeEventForm()">Annulla</button>
+  </div>
+</div>
+
+<!-- HIDDEN INPUTS -->
+<input type="file" id="import-in" accept=".json" multiple style="display:none"
+  onchange="window.MapModule?.onImport(this)">
+
+<!-- PIN PAD + NAVIGATION + SETUP LOGIC -->
 <script>
+// ─── WIZARD STEPS (interno al setup) ─────────────────
+// Questi step vivono DENTRO step-setup, non nel auth-screen direttamente
+function showWizStep(id) {
+  ['step-welcome','step-pin','step-confirm','step-phrase','step-verify']
+    .forEach(s => {
+      const el = document.getElementById(s);
+      if (el) el.style.display = 'none';
+    });
+  const el = document.getElementById(id);
+  if (el) el.style.display = 'flex';
+  if (id === 'step-verify') buildVerifyUI();
+}
+
+// ─── SETUP PIN STATE ──────────────────────────────────
+let _setupPin = '', _confirmPin = '', _recovWords = [], _verifyIdx = [];
+let _pinLocked = false, _confirming = false;
+
+function setupKey(d) {
+  if (_setupPin.length >= 6) return;
+  _setupPin += d;
+  updDots('setup-dots', 's', _setupPin.length);
+  if (_setupPin.length === 6) setTimeout(() => showWizStep('step-confirm'), 200);
+}
+function setupDel() {
+  _setupPin = _setupPin.slice(0,-1);
+  updDots('setup-dots', 's', _setupPin.length);
+}
+
+async function confirmKey(d) {
+  if (_confirming || _confirmPin.length >= 6) return;
+  _confirmPin += d;
+  updDots('confirm-dots', 'c', _confirmPin.length);
+  if (_confirmPin.length === 6) {
+    if (_confirmPin !== _setupPin) {
+      setDotsState('confirm-dots', 'c', 'err');
+      setTimeout(() => { _confirmPin=''; updDots('confirm-dots','c',0); }, 800);
+      return;
+    }
+    _confirming = true;
+    const sub = document.getElementById('confirm-sub');
+    if (sub) sub.textContent = '⚙️ Configurazione...';
+    try {
+      await window.Hardware?.setupWithPin(_setupPin);
+    } catch(e) {
+      _confirming = false;
+      console.error('setup error:', e);
+    }
+  }
+}
+function confirmDel() {
+  if (_confirming) return;
+  _confirmPin = _confirmPin.slice(0,-1);
+  updDots('confirm-dots','c', _confirmPin.length);
+}
+
+// Dopo AUTH_SUCCESS_PRF, crypto.js emette CRYPTO_KEY_DERIVED con le parole
+// boot.js gestisce APP_READY, ma le parole vengono mostrate qui
+// tramite evento che boot.js non usa — subscribe diretto
+document.addEventListener('DOMContentLoaded', () => {
+  // Ascolta words dal crypto per mostrarle nel wizard
+  if (window._State_subscribe) {
+    window._State_subscribe('CRYPTO_KEY_DERIVED', ({ isSetup, words }) => {
+      if (!isSetup || !words) return;
+      _recovWords = words;
+      const grid = document.getElementById('phrase-grid');
+      if (grid) grid.innerHTML = words.map((w,i) =>
+        `<div class="phrase-word">
+          <span class="pnum">${String(i+1).padStart(2,'0')}</span>
+          <span class="pword">${w}</span>
+        </div>`
+      ).join('');
+      showWizStep('step-phrase');
+    });
+  }
+});
+
+function buildVerifyUI() {
+  _verifyIdx = [];
+  while (_verifyIdx.length < 4) {
+    const n = Math.floor(Math.random()*12);
+    if (!_verifyIdx.includes(n)) _verifyIdx.push(n);
+  }
+  _verifyIdx.sort((a,b)=>a-b);
+  const grid = document.getElementById('verify-grid');
+  if (!grid) return;
+  grid.innerHTML = _verifyIdx.map(i =>
+    `<div class="rrow">
+      <span class="rnum">#${i+1}</span>
+      <input class="rinput" data-i="${i}" placeholder="parola ${i+1}..."
+        autocomplete="off" spellcheck="false">
+    </div>`
+  ).join('');
+  document.querySelectorAll('#verify-grid .rinput').forEach(inp => {
+    inp.addEventListener('input', checkVerify);
+  });
+}
+
+function checkVerify() {
+  let ok = true;
+  document.querySelectorAll('#verify-grid .rinput').forEach(inp => {
+    const v = inp.value.trim().toLowerCase();
+    if (!v) { inp.className='rinput'; ok=false; }
+    else if (v === _recovWords[+inp.dataset.i]) inp.className='rinput ok';
+    else { inp.className='rinput err'; ok=false; }
+  });
+  const btn = document.getElementById('verify-btn');
+  if (btn) btn.disabled = !ok;
+}
+
+function finishSetup() {
+  window.Hardware?.markBackupVerified();
+}
+
+// ─── LOCK PIN STATE ───────────────────────────────────
+let _lockPin = '';
+
+async function lockKey(d) {
+  if (_pinLocked || _lockPin.length >= 6) return;
+  _lockPin += d;
+  updDots('lock-dots', 'd', _lockPin.length);
+  if (_lockPin.length === 6) {
+    _pinLocked = true;
+    const sub = document.getElementById('lock-sub');
+    if (sub) sub.textContent = '🔓 Verifica...';
+    try {
+      await window.Hardware?.unlockWithPin(_lockPin);
+    } catch(e) {
+      pinError();
+    }
+  }
+}
+
+function lockDel() {
+  if (_pinLocked) return;
+  if (_lockPin.length > 0) {
+    _lockPin = _lockPin.slice(0,-1);
+    updDots('lock-dots', 'd', _lockPin.length);
+  }
+}
+
+function pinError() {
+  setDotsState('lock-dots', 'd', 'err');
+  const sub = document.getElementById('lock-sub');
+  if (sub) sub.textContent = 'PIN errato. Riprova.';
+  if (navigator.vibrate) navigator.vibrate([80,40,80]);
+  setTimeout(() => {
+    _lockPin = ''; _pinLocked = false;
+    updDots('lock-dots','d',0);
+    if (sub) sub.textContent = 'La tua privacy, sulla chain, per sempre';
+  }, 900);
+}
+
+// ─── RECOVERY ─────────────────────────────────────────
+function showRecovery() {
+  // Costruisce la griglia delle 12 parole
+  const grid = document.getElementById('rec-grid');
+  if (!grid) return;
+  grid.innerHTML = Array.from({length:12},(_,i) =>
+    `<div class="rrow">
+      <span class="rnum">#${i+1}</span>
+      <input class="rinput" id="rw${i}" placeholder="parola ${i+1}..."
+        autocomplete="off" spellcheck="false" style="text-transform:lowercase">
+    </div>`
+  ).join('');
+  // Mostra step-recovery
+  if (window.UI) window.UI.showStep('step-recovery');
+}
+
+async function doRecovery() {
+  const words = Array.from({length:12},(_,i) => {
+    const el = document.getElementById('rw'+i);
+    return el ? el.value.trim().toLowerCase() : '';
+  });
+  const err = document.getElementById('rec-err');
+  if (err) { err.style.color='var(--text2)'; err.textContent='🔍 Verifica...'; }
+  await window.Hardware?.recoverWithWords(words);
+}
+
+// ─── DOT HELPERS ──────────────────────────────────────
+function updDots(dotId, pfx, n) {
+  for (let i=0; i<6; i++) {
+    const el = document.getElementById(pfx+i);
+    if (el) el.className = 'dot' + (i<n?' on':'');
+  }
+}
+function setDotsState(dotId, pfx, state) {
+  for (let i=0; i<6; i++) {
+    const el = document.getElementById(pfx+i);
+    if (el) el.className = 'dot ' + state;
+  }
+}
+
+// ─── PIN PAD TOUCH ────────────────────────────────────
+const KEY_FNS = { lockKey, lockDel, setupKey, setupDel, confirmKey, confirmDel };
+let _lastTouch = 0;
+document.addEventListener('touchstart', e => {
+  const key = e.target.closest('.key');
+  if (!key || key.classList.contains('empty')) return;
+  e.preventDefault();
+  _lastTouch = Date.now();
+  key.classList.add('pressed');
+  setTimeout(() => key.classList.remove('pressed'), 120);
+  if (navigator.vibrate) navigator.vibrate(8);
+  const fn = key.dataset.fn, v = key.dataset.v;
+  if (fn && KEY_FNS[fn]) v ? KEY_FNS[fn](v) : KEY_FNS[fn]();
+}, {passive:false});
+document.addEventListener('click', e => {
+  if (Date.now() - _lastTouch < 500) return;
+  const key = e.target.closest('.key');
+  if (!key || key.classList.contains('empty')) return;
+  const fn = key.dataset.fn, v = key.dataset.v;
+  if (fn && KEY_FNS[fn]) v ? KEY_FNS[fn](v) : KEY_FNS[fn]();
+});
+
+// ─── NAVIGATION ───────────────────────────────────────
 function openMap() {
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('map-screen').classList.add('active');
-  window.MapModule?.init();
+  setTimeout(() => { window.MapModule?.init(); window.MapModule?.invalidate?.(); }, 300);
 }
 function openNotes() {
   document.getElementById('notes-screen').classList.add('open');
   document.getElementById('notes-fab').classList.add('visible');
   window.NotesModule?.load();
 }
-function openChat() {
-  document.getElementById('chat-screen').classList.add('open');
-}
-function openSettings() {
-  document.getElementById('settings-screen').classList.add('open');
+function openChat() { document.getElementById('chat-screen').classList.add('open'); }
+function openSettings() { document.getElementById('settings-screen').classList.add('open'); }
+function openCalendar() {
+  document.getElementById('calendar-screen').classList.add('open');
+  window.CalendarModule?.load();
 }
 function closeSection(id) {
   document.getElementById(id)?.classList.remove('open');
   document.getElementById('notes-fab')?.classList.remove('visible');
   if (id === 'map-screen') {
-    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById('home-screen').classList.add('active');
   }
 }
-function openCalendar() {
-  document.getElementById('calendar-screen').classList.add('open');
-  window.CalendarModule?.load();
-}
 
-// Lettura sicura del file di backup (nessuna crittografia qui)
-let _restoreFileBuffer = null;
-function onBackupFile(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => { window._restoreFileBuffer = e.target.result; };
-  reader.readAsArrayBuffer(file);
+// Back gesture
+window.addEventListener('popstate', () => {
+  ['notes-screen','chat-screen','settings-screen','calendar-screen',
+   'trips-panel','fav-modal','cal-event-form'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.classList.remove('open'); }
+  });
+  document.getElementById('note-editor')?.classList.remove('open');
+  document.getElementById('notes-fab')?.classList.remove('visible');
+});
+history.pushState({}, '');
+
+// ─── HOME TIME ────────────────────────────────────────
+function updateHomeTime() {
+  const el = document.getElementById('home-time');
+  if (!el) return;
+  const n = new Date();
+  el.textContent = n.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}) +
+    ' · ' + n.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'});
 }
+setInterval(updateHomeTime, 30000);
 </script>
 
-<script type="module" src="boot.js"></script>
+<!-- ENTRY POINT ES MODULE -->
+<script type="module">
+import State from './state.js';
+import Hardware from './hardware.js';
+
+// Esponi per gli script inline
+window.Hardware = Hardware;
+
+// Patch: esponi subscribe per lo script inline del wizard
+window._State_subscribe = State.subscribe.bind(State);
+
+// Ascolta CRYPTO_KEY_DERIVED per mostrare le 12 parole nel wizard
+State.subscribe('CRYPTO_KEY_DERIVED', ({ isSetup, words }) => {
+  if (!isSetup || !words) return;
+  window._setupWords = words;
+  // usa la funzione locale dello script inline
+  if (window._onWordsReady) window._onWordsReady(words);
+});
+
+// Ascolta errori PIN per aggiornare l'UI
+State.subscribe('AUTH_FAILED', () => {
+  window.pinError?.();
+});
+
+// Importa tutti i moduli (si auto-registrano sugli eventi)
+import './crypto.js';
+import './db.js';
+import './backup.js';
+import './calendar.js';
+import UI from './ui.js';
+import './map.js';
+import './notes.js';
+
+// Avvia il boot
+const { default: boot_js } = await import('./boot.js');
+</script>
+
+<!-- Mostra le 12 parole quando arrivano -->
+<script>
+window._onWordsReady = function(words) {
+  window._recovWords_global = words;
+  // Aggiorna la variabile locale del wizard
+  if (typeof _recovWords !== 'undefined') _recovWords = words;
+  const grid = document.getElementById('phrase-grid');
+  if (grid) {
+    grid.innerHTML = words.map((w,i) =>
+      `<div class="phrase-word">
+        <span class="pnum">${String(i+1).padStart(2,'0')}</span>
+        <span class="pword">${w}</span>
+      </div>`
+    ).join('');
+  }
+  showWizStep('step-phrase');
+};
+</script>
 
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js')
-      .then(r => console.log('[sw] Registrato con successo'))
-      .catch(err => console.error('[sw] Errore:', err));
+      .then(r => console.log('[sw] OK'))
+      .catch(e => console.warn('[sw]', e));
   });
 }
 </script>

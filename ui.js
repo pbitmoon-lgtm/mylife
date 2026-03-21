@@ -14,7 +14,10 @@ const UI = {
   },
 
   showStep(id) {
-    ['step-welcome','step-pin','step-confirm','step-phrase','step-verify']
+    // Tutti gli step possibili — boot.js usa step-lock/setup/recovery
+    // wizard usa step-welcome/pin/confirm/phrase/verify
+    ['step-welcome','step-pin','step-confirm','step-phrase','step-verify',
+     'step-lock','step-setup','step-recovery']
       .forEach(s => {
         const el = document.getElementById(s);
         if (el) el.style.display = 'none';
@@ -23,6 +26,8 @@ const UI = {
     if (el) {
       el.style.display = 'flex';
       if (id === 'step-verify') window.buildVerifyUI?.();
+    } else {
+      console.error('[ui] showStep: elemento non trovato:', id);
     }
   },
 

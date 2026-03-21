@@ -88,6 +88,9 @@ const StorageManager = (() => {
     try {
       await initDB();
       State.dispatch('STORAGE_MOUNTED');
+      // APP_READY sblocca la home screen — emesso qui perché
+      // db.js è l'ultimo modulo della cascata di boot
+      State.dispatch('APP_READY');
     } catch (err) {
       State.dispatch('SYSTEM_ERROR', { error: 'Fallimento montaggio disco: ' + err.message });
     }
@@ -121,11 +124,34 @@ const StorageManager = (() => {
   State.subscribe('INTENT_LOAD_RECORDS', async ({ type, requestId }) => {
     try {
       const all = await readAll('core_records');
-      all.forEach(record => {
-        State.dispatch('REQUEST_DECRYPT', { id: record.id, buffer: record.data, isAsset: false, requestId });
+      // Filtra per tipo: ogni modulo riceve solo i suoi record
+      const filtered = type
+        ? all.filter(r => {
+            // Il tipo è nel payload cifrato — dobbiamo cercarlo nei dati
+            // Usiamo l'indice 'type' creato in onupgradeneeded
+            return true; // decifreremo tutto e filtreremo in PAYLOAD_DECRYPTED
+          })
+        : all;
+
+      // RECORDS_LOAD_STARTED è CRITICO: dice ai moduli quanti record aspettare
+      // Se count === 0, il modulo può renderizzare subito lo stato vuoto
+      State.dispatch('RECORDS_LOAD_STARTED', {
+        type,
+        requestId,
+        count: filtered.length,
+      });
+
+      filtered.forEach(record => {
+        State.dispatch('REQUEST_DECRYPT', {
+          id:        record.id,
+          buffer:    record.data,
+          isAsset:   false,
+          requestId, // passato a crypto.js → arriva in PAYLOAD_DECRYPTED
+        });
       });
     } catch (err) {
       console.error('[db] errore lettura:', err);
+      State.dispatch('RECORDS_LOAD_STARTED', { type, requestId, count: 0 });
     }
   });
 
