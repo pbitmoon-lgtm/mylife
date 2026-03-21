@@ -32,14 +32,17 @@ const CalendarModule = (() => {
   }
 
   State.subscribe('PAYLOAD_DECRYPTED', ({ id, payload, isAsset, requestId }) => {
-    if (isAsset || !payload || requestId !== 'cal_load') return;
+    if (isAsset || !payload) return;
+    if (requestId !== 'cal_load') return;            // ignora altri moduli
     if (payload.type !== 'appointment') return;
+    if (_events.find(e => e.id === id)) return;      // no duplicati
     _events.push({ ...payload, id });
     renderCalendar();
   });
 
-  State.subscribe('RECORDS_LOAD_STARTED', ({ type, count, requestId }) => {
-    if (requestId === 'cal_load' && count === 0) renderCalendar();
+  State.subscribe('RECORDS_LOAD_STARTED', ({ requestId, count }) => {
+    if (requestId !== 'cal_load') return;
+    if (count === 0) renderCalendar();
   });
 
   // ─── RENDER CALENDARIO ────────────────────────────────
@@ -278,26 +281,38 @@ const CalendarModule = (() => {
     const picker = document.getElementById('cal-note-picker');
     if (!picker) return;
 
-    // Richiedi le note disponibili
     const notes = [];
-    const unsub = State.subscribe('PAYLOAD_DECRYPTED', ({ payload, isAsset, requestId }) => {
+    let _count = -1;
+
+    const unsubDecrypted = State.subscribe('PAYLOAD_DECRYPTED', ({ payload, isAsset, requestId }) => {
       if (isAsset || !payload || requestId !== 'cal_pick_notes') return;
       if (payload.type === 'note') notes.push(payload);
+      // Controlla se abbiamo ricevuto tutti i record
+      if (_count >= 0 && notes.length >= _count) showPicker();
     });
 
-    State.subscribe('RECORDS_LOAD_STARTED', ({ type, count, requestId }) => {
+    const unsubStarted = State.subscribe('RECORDS_LOAD_STARTED', ({ requestId, count }) => {
       if (requestId !== 'cal_pick_notes') return;
-      unsub();
-      setTimeout(() => {
-        picker.innerHTML = notes.length
-          ? notes.map(n => `
-              <div class="cal-pick-item" onclick="CalendarModule.selectNote(${JSON.stringify(JSON.stringify({id:n.id||0,title:n.title||'Nota'}))})">
-                📓 ${UI.esc(n.title||'Nota senza titolo')}
-              </div>`).join('')
-          : '<div class="no-items">Nessuna nota disponibile</div>';
-        picker.style.display = 'block';
-      }, 300);
+      unsubStarted();                               // una sola volta
+      _count = count;
+      if (count === 0) showPicker();
     });
+
+    function showPicker() {
+      unsubDecrypted();
+      picker.innerHTML = notes.length
+        ? notes.map(n => {
+            const d = JSON.stringify({id:n.id||0,title:n.title||''})
+              .replace(/'/g, '&#39;');
+            return `<div class="cal-pick-item"
+              data-note='${d}'
+              onclick="CalendarModule.selectNoteEl(this)">
+              📓 ${UI.esc(n.title||'Nota senza titolo')}
+            </div>`;
+          }).join('')
+        : '<div class="no-items">Nessuna nota disponibile</div>';
+      picker.style.display = 'block';
+    }
 
     State.dispatch('INTENT_LOAD_RECORDS', { type:'note', requestId:'cal_pick_notes' });
   }
@@ -308,6 +323,14 @@ const CalendarModule = (() => {
     document.getElementById('cal-note-picker').style.display = 'none';
   }
 
+  function selectNoteEl(el) {
+    try {
+      const note = JSON.parse(el.dataset.note);
+      _setLinkedNote(note);
+      document.getElementById('cal-note-picker').style.display = 'none';
+    } catch(e) { console.error('[cal] selectNoteEl:', e); }
+  }
+
   // Picker luogo — usa i preferiti dalla mappa
   function pickPlace() {
     const picker = document.getElementById('cal-place-picker');
@@ -316,10 +339,14 @@ const CalendarModule = (() => {
     // Prendi i preferiti già in cache nel MapModule
     const favs = window.MapModule?.getFavsForCalendar?.() || [];
     picker.innerHTML = favs.length
-      ? favs.map(f => `
-          <div class="cal-pick-item" onclick="CalendarModule.selectPlace(${JSON.stringify(JSON.stringify({id:f.id,name:f.name,icon:f.icon,lat:f.lat,lng:f.lng}))})">
+      ? favs.map(f => {
+          const data = {id:f.id,name:f.name,icon:f.icon||'📍',lat:f.lat,lng:f.lng};
+          return `<div class="cal-pick-item"
+            data-place='${JSON.stringify(data)}'
+            onclick="CalendarModule.selectPlaceEl(this)">
             ${f.icon||'📍'} ${UI.esc(f.name)}
-          </div>`).join('')
+          </div>`;
+        }).join('')
       : '<div class="no-items">Nessun luogo salvato nella mappa</div>';
     picker.style.display = 'block';
   }
@@ -328,6 +355,14 @@ const CalendarModule = (() => {
     const place = JSON.parse(placeJson);
     _setLinkedPlace(place);
     document.getElementById('cal-place-picker').style.display = 'none';
+  }
+
+  function selectPlaceEl(el) {
+    try {
+      const place = JSON.parse(el.dataset.place);
+      _setLinkedPlace(place);
+      document.getElementById('cal-place-picker').style.display = 'none';
+    } catch(e) { console.error('[cal] selectPlaceEl:', e); }
   }
 
   // ─── UTILS ────────────────────────────────────────────
@@ -345,7 +380,8 @@ const CalendarModule = (() => {
   const pub = {
     load, renderCalendar, prevMonth, nextMonth, goToday,
     openDay, openEventForm, closeEventForm, editEvent, saveEvent, deleteEvent,
-    pickNote, selectNote, pickPlace, selectPlace,
+    pickNote, selectNote, selectNoteEl,
+    pickPlace, selectPlace, selectPlaceEl,
     removeLinkedNote, removeLinkedPlace,
   };
   window.CalendarModule = pub;

@@ -118,13 +118,39 @@ const Hardware = (() => {
   }
 
   // ─── FALLBACK PIN ─────────────────────────────────────
-  // Usato quando WebAuthn PRF non è disponibile.
-  // Deriva entropia da PIN + deviceId via SHA-256.
   async function pinToBytes(pin, deviceId) {
     const material = `mylife:v4:${pin}:${deviceId}`;
     const hash = await crypto.subtle.digest('SHA-256',
       new TextEncoder().encode(material));
     return new Uint8Array(hash);
+  }
+
+  // ─── VERIFICA PIN ─────────────────────────────────────
+  // Replica la derivazione HKDF di crypto.js per verificare
+  // il PIN PRIMA di emettere AUTH_SUCCESS_PRF.
+  // Senza questa verifica, qualsiasi PIN è accettato.
+  async function verifyPin(pin, deviceId, encryptedSeed) {
+    try {
+      const rawBytes = await pinToBytes(pin, deviceId);
+      // Replica esatta di crypto.js deriveMasterKey
+      const km = await crypto.subtle.importKey(
+        'raw', rawBytes, { name:'HKDF' }, false, ['deriveKey']
+      );
+      const key = await crypto.subtle.deriveKey(
+        { name:'HKDF', hash:'SHA-256',
+          salt: new TextEncoder().encode('MyLife:domain:v4'),
+          info: new TextEncoder().encode('MyLife Master Key v4') },
+        km, { name:'AES-GCM', length:256 }, false, ['decrypt']
+      );
+      // Tenta decifratura del seed — se fallisce il PIN è sbagliato
+      const buf = new Uint8Array(encryptedSeed);
+      const iv  = buf.slice(0, 12);
+      const ct  = buf.slice(12);
+      await crypto.subtle.decrypt({ name:'AES-GCM', iv }, key, ct);
+      return true; // PIN corretto
+    } catch {
+      return false; // PIN errato — AES-GCM authentication failed
+    }
   }
 
   // ─── SEED ↔ PAROLE ────────────────────────────────────
@@ -176,20 +202,22 @@ const Hardware = (() => {
     const seed     = crypto.getRandomValues(new Uint8Array(32));
     const words    = seedToWords(seed);
 
+    // Salva user SENZA seed in chiaro.
+    // Il seed viene cifrato da crypto.js dopo CRYPTO_KEY_DERIVED
+    // e riscritto da persistSeed() — mai in chiaro su disco.
     writeUser({
       userId:    Array.from(crypto.getRandomValues(new Uint8Array(8)))
                    .map(b=>b.toString(16).padStart(2,'0')).join(''),
       deviceId,
       created:   new Date().toISOString().split('T')[0],
       authMode:  'pin',
-      seed:      Array.from(seed), // salvato cifrato dopo CRYPTO_KEY_DERIVED
       backupVerified: false,
     });
 
     State.dispatch('AUTH_SUCCESS_PRF', { rawBytes, seed, words, isSetup: true });
   }
 
-  // Unlock con PIN
+  // Unlock con PIN — verifica PRIMA di procedere
   async function unlockWithPin(pin) {
     const user     = readUser();
     const deviceId = await getDeviceId();
@@ -199,15 +227,18 @@ const Hardware = (() => {
       return;
     }
 
-    const rawBytes = await pinToBytes(pin, deviceId);
+    // Se abbiamo encryptedSeed, verifica il PIN crittograficamente
+    if (user.encryptedSeed) {
+      const ok = await verifyPin(pin, deviceId, user.encryptedSeed);
+      if (!ok) {
+        State.dispatch('AUTH_FAILED', { reason: 'wrong_pin' });
+        return;
+      }
+    }
 
-    // Verifica PIN: proviamo a ricostruire il seed
-    // (la verifica reale avviene quando il crypto decodifica)
-    State.dispatch('AUTH_SUCCESS_PRF', {
-      rawBytes,
-      seed: user.seed ? new Uint8Array(user.seed) : null,
-      isSetup: false
-    });
+    // PIN verificato (o nessun seed da verificare — primo unlock dopo setup)
+    const rawBytes = await pinToBytes(pin, deviceId);
+    State.dispatch('AUTH_SUCCESS_PRF', { rawBytes, isSetup: false });
   }
 
   // Recovery con 12 parole
@@ -233,7 +264,6 @@ const Hardware = (() => {
       created:   existing?.created || new Date().toISOString().split('T')[0],
       migratedAt: new Date().toISOString().split('T')[0],
       authMode:  'pin',
-      seed:      Array.from(seed),
       backupVerified: true,
     });
 

@@ -49,20 +49,21 @@ const NotesModule = (() => {
     State.dispatch('INTENT_LOAD_RECORDS', { type:'note', requestId:'notes_list' });
   }
 
-  // Ascolta note decifrate
-  State.subscribe('PAYLOAD_DECRYPTED', ({ id, payload, requestId }) => {
-    if (!payload || payload.type !== 'note') return;
+  // Ascolta SOLO i payload con requestId di questo modulo
+  State.subscribe('PAYLOAD_DECRYPTED', ({ id, payload, isAsset, requestId }) => {
+    if (isAsset || !payload) return;
+    if (requestId !== 'notes_list') return;          // ignora altri moduli
+    if (payload.type !== 'note') return;
     if (_loadedIds.has(id)) return;
     _loadedIds.add(id);
     _notes.push({ ...payload, id });
-    if (requestId === 'notes_list') render();
+    render();
   });
 
-  State.subscribe('RECORDS_LOAD_STARTED', ({ type, count, requestId }) => {
-    if (type === 'note' && requestId === 'notes_list' && count === 0) {
-      _loading = false;
-      render();
-    }
+  State.subscribe('RECORDS_LOAD_STARTED', ({ requestId, count }) => {
+    if (requestId !== 'notes_list') return;
+    _loading = false;
+    if (count === 0) render();                       // lista vuota → stato vuoto
   });
 
   // ─── RENDER GRIGLIA ───────────────────────────────────
