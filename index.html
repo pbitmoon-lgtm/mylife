@@ -373,6 +373,53 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+
+/* ── CHAT ── */
+#chat-screen{position:fixed;inset:0;background:var(--bg);z-index:20;display:none;flex-direction:column}
+#chat-screen.open{display:flex}
+.hidden{display:none!important}
+.chat-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;padding:40px;text-align:center;color:var(--text2)}
+.chat-conv-item{display:flex;align-items:center;gap:12px;padding:14px 16px;
+  cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);transition:background .15s}
+.chat-conv-item:active{background:rgba(255,255,255,.05)}
+.chat-avatar{width:46px;height:46px;border-radius:50%;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;font-weight:700;color:#fff;flex-shrink:0}
+.chat-conv-info{flex:1;min-width:0}
+.chat-conv-head{display:flex;justify-content:space-between;margin-bottom:4px}
+.chat-conv-name{font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-conv-time{font-size:11px;color:var(--text2);flex-shrink:0}
+.chat-conv-preview{font-size:13px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;display:flex;align-items:center;gap:6px}
+.chat-unread-badge{background:var(--accent);color:#fff;font-size:10px;font-weight:700;
+  min-width:18px;height:18px;border-radius:9px;display:inline-flex;
+  align-items:center;justify-content:center;padding:0 5px;flex-shrink:0}
+.chat-input-area{flex:1;background:rgba(255,255,255,.07);border:1px solid var(--border);
+  border-radius:20px;padding:10px 14px;font-family:'Sora',sans-serif;font-size:15px;
+  color:var(--text);outline:none;resize:none;max-height:120px;overflow-y:auto;
+  line-height:1.5}
+.chat-input-area:focus{border-color:var(--accent)}
+.chat-bubble-wrap{display:flex;flex-direction:column;margin-bottom:4px}
+.chat-bubble-wrap.me{align-items:flex-end}
+.chat-bubble-wrap.them{align-items:flex-start}
+.chat-bubble{max-width:78%;padding:10px 14px;border-radius:18px;
+  font-size:15px;line-height:1.5;word-break:break-word}
+.chat-bubble.me{background:linear-gradient(135deg,var(--accent),var(--accent2));
+  color:#fff;border-bottom-right-radius:4px}
+.chat-bubble.them{background:rgba(255,255,255,.1);
+  color:var(--text);border-bottom-left-radius:4px}
+.chat-time{font-size:10px;color:var(--text3);margin-top:2px;padding:0 4px}
+.chat-date-divider{text-align:center;font-size:11px;color:var(--text3);
+  margin:12px 0;padding:4px 12px;background:rgba(255,255,255,.05);
+  border-radius:20px;align-self:center;display:inline-block}
+.chat-img{max-width:100%;border-radius:12px;cursor:pointer;display:block}
+#chat-img-overlay{display:none}
+#chat-img-overlay.open{display:flex;position:fixed;inset:0;background:rgba(0,0,0,.95);
+  z-index:200;align-items:center;justify-content:center}
+#chat-img-full{max-width:95vw;max-height:90vh;border-radius:12px;object-fit:contain}
+
 </style>
 </head>
 <body>
@@ -688,16 +735,93 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
 
 <!-- CHAT SCREEN -->
 <div id="chat-screen">
+
+  <!-- Vista lista conversazioni -->
+  <div id="chat-list-view" style="display:flex;flex-direction:column;height:100%">
+    <div class="sp-header">
+      <button class="sp-close" onclick="closeSection('chat-screen')">←</button>
+      <div class="sp-title">💬 Chat</div>
+      <div style="display:flex;gap:6px">
+        <button class="sp-close" onclick="ChatModule?.showMyId()" title="Il mio ID">🪪</button>
+        <button class="sp-close" onclick="ChatModule?.openAddContact()">＋</button>
+      </div>
+    </div>
+    <div id="chat-conv-list" style="flex:1;overflow-y:auto;padding:8px 0"></div>
+  </div>
+
+  <!-- Vista chat attiva -->
+  <div id="chat-active-view" class="hidden" style="display:flex;flex-direction:column;height:100%">
+    <div class="sp-header">
+      <button class="sp-close" onclick="ChatModule?.closeChat()">←</button>
+      <div>
+        <div class="sp-title" id="chat-active-name" style="margin-bottom:0;font-size:16px">Contatto</div>
+        <div id="chat-active-status" style="font-size:11px;color:var(--text2)">Offline</div>
+      </div>
+      <button class="sp-close">⋯</button>
+    </div>
+    <div id="chat-messages" style="flex:1;overflow-y:auto;padding:12px 14px"></div>
+    <!-- Input area -->
+    <div style="padding:10px 12px;border-top:1px solid var(--border);display:flex;align-items:flex-end;gap:8px;flex-shrink:0">
+      <button onclick="document.getElementById('chat-img-in').click()"
+        style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.07);
+               border:1px solid var(--border);color:var(--text2);font-size:18px;
+               flex-shrink:0;cursor:pointer">📷</button>
+      <textarea id="chat-input" class="chat-input-area" placeholder="Scrivi un messaggio..."
+        rows="1" onkeydown="ChatModule?.onInputKeydown(event)"
+        oninput="ChatModule?.onInputChange(this)"></textarea>
+      <button onclick="ChatModule?.sendMsg()"
+        style="width:40px;height:40px;border-radius:50%;
+               background:linear-gradient(135deg,var(--accent),var(--accent2));
+               border:none;color:#fff;font-size:18px;flex-shrink:0;cursor:pointer">↑</button>
+    </div>
+    <input type="file" id="chat-img-in" accept="image/*" style="display:none"
+      onchange="ChatModule?.sendImage(this)">
+  </div>
+
+</div>
+
+<!-- CHAT: pannello aggiungi contatto -->
+<div class="side-panel" id="chat-add-panel">
   <div class="sp-header">
-    <button class="sp-close" onclick="closeSection('chat-screen')">←</button>
-    <div class="sp-title">💬 Chat</div>
+    <div class="sp-title">Nuovo contatto</div>
+    <button class="sp-close" onclick="ChatModule?.closeAddContact()">✕</button>
   </div>
-  <div class="chat-ph">
-    <div style="font-size:48px;opacity:.4;margin-bottom:16px">💬</div>
-    <div style="font-size:18px;font-weight:700;color:var(--text);opacity:.6">Chat P2P</div>
-    <div style="font-size:13px;line-height:1.6;margin-top:8px">Messaggi cifrati · Gruppi · MetaMask</div>
-    <div class="coming">M1.3 — In sviluppo</div>
+  <div class="sp-body">
+    <div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:20px">
+      Aggiungi un contatto inserendo il suo nome e il suo ID pubblico.
+      Puoi trovare il tuo ID in "Il mio ID" (icona 🪪).
+    </div>
+    <input class="mm-input" id="chat-add-name" placeholder="Nome contatto..." maxlength="40">
+    <input class="mm-input" id="chat-add-key" placeholder="ID pubblico (opzionale)..." maxlength="200"
+      style="font-family:'JetBrains Mono',monospace;font-size:11px">
+    <button class="btn" onclick="ChatModule?.saveContact()">Salva contatto</button>
+    <button class="btn-ghost" onclick="ChatModule?.closeAddContact()">Annulla</button>
   </div>
+</div>
+
+<!-- CHAT: il mio ID -->
+<div class="side-panel" id="chat-myid-panel">
+  <div class="sp-header">
+    <div class="sp-title">🪪 Il mio ID</div>
+    <button class="sp-close" onclick="ChatModule?.closeMyId()">✕</button>
+  </div>
+  <div class="sp-body">
+    <div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:20px">
+      Condividi questo ID con chi vuoi chattare.<br>
+      È derivato matematicamente dal tuo seed — non rivela nulla di te.
+    </div>
+    <div id="chat-my-pubkey" style="font-family:'JetBrains Mono',monospace;font-size:11px;
+      background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:12px;
+      padding:14px;word-break:break-all;line-height:1.6;margin-bottom:16px;color:var(--accent)">
+    </div>
+    <button class="btn" id="chat-copy-btn" onclick="ChatModule?.copyMyId()">Copia ID</button>
+    <button class="btn-ghost" onclick="ChatModule?.closeMyId()">Chiudi</button>
+  </div>
+</div>
+
+<!-- CHAT: viewer immagine fullscreen -->
+<div id="chat-img-overlay" onclick="ChatModule?.closeImg()">
+  <img id="chat-img-full" src="" alt="">
 </div>
 
 <!-- SETTINGS SCREEN -->
@@ -1074,39 +1198,32 @@ setInterval(updateHomeTime, 30000);
 
 <!-- ENTRY POINT ES MODULE -->
 <script type="module">
-import State from './state.js';
+// ── Importa TUTTO in ordine corretto ──────────────────
+import State    from './state.js';
 import Hardware from './hardware.js';
-
-// Esponi per gli script inline
-window.Hardware = Hardware;
-
-// Patch: esponi subscribe per lo script inline del wizard
-window._State_subscribe = State.subscribe.bind(State);
-
-// Ascolta CRYPTO_KEY_DERIVED per mostrare le 12 parole nel wizard
-State.subscribe('CRYPTO_KEY_DERIVED', ({ isSetup, words }) => {
-  if (!isSetup || !words) return;
-  window._setupWords = words;
-  // usa la funzione locale dello script inline
-  if (window._onWordsReady) window._onWordsReady(words);
-});
-
-// Ascolta errori PIN per aggiornare l'UI
-State.subscribe('AUTH_FAILED', () => {
-  window.pinError?.();
-});
-
-// Importa tutti i moduli (si auto-registrano sugli eventi)
 import './crypto.js';
 import './db.js';
 import './backup.js';
 import './calendar.js';
-import UI from './ui.js';
+import UI       from './ui.js';
 import './map.js';
 import './notes.js';
+import './chat.js';
+import './boot.js';   // boot.js si avvia da solo (chiama boot() internamente)
 
-// Avvia il boot
-const { default: boot_js } = await import('./boot.js');
+// Esponi per gli script inline (PIN pad, wizard)
+window.Hardware = Hardware;
+
+// Ascolta CRYPTO_KEY_DERIVED per mostrare le 12 parole nel wizard
+State.subscribe('CRYPTO_KEY_DERIVED', ({ isSetup, words }) => {
+  if (!isSetup || !words) return;
+  window._onWordsReady?.(words);
+});
+
+// Ascolta errori PIN
+State.subscribe('AUTH_FAILED', () => {
+  window.pinError?.();
+});
 </script>
 
 <!-- Mostra le 12 parole quando arrivano -->

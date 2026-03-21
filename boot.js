@@ -215,11 +215,5 @@ State.subscribe('CRYPTO_LOCKED', () => {
   _zkWorker.postMessage({ type: 'INTENT_SHUTDOWN' });
 });
 
-// Esporta boot per l'import in index.html
-export { boot as default };
-// Avvio diretto se non importato
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', boot);
-} else {
-  boot();
-}
+// Si avvia automaticamente quando importato
+boot();
