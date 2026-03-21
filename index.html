@@ -112,9 +112,20 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
   border:none;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
 
 /* ── MAP ── */
-#map-screen{position:fixed;inset:0;z-index:20;display:none}
-#map-screen.active{display:block}
-#map{position:absolute;inset:0;filter:invert(1) hue-rotate(180deg) brightness(.85) saturate(.9)}
+#map-screen{
+  position:fixed;inset:0;z-index:20;
+  display:none;          /* nascosta per default */
+  width:100%;height:100%;
+}
+#map-screen.active{
+  display:block !important;  /* sovrascrive qualsiasi altra regola */
+}
+#map{
+  position:absolute;
+  top:0;left:0;right:0;bottom:0;
+  width:100%;height:100%;
+  filter:invert(1) hue-rotate(180deg) brightness(.85) saturate(.9);
+}
 .leaflet-control-zoom,.leaflet-control-attribution{display:none}
 #map-ui{position:absolute;inset:0;pointer-events:none}#map-ui>*{pointer-events:all}
 #map-top{position:absolute;top:0;left:0;right:0;padding:52px 14px 0;display:flex;justify-content:space-between;align-items:flex-start}
@@ -502,7 +513,7 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
 </div>
 
 <!-- ══════ MAP SCREEN ══════ -->
-<div class="screen" id="map-screen">
+<div id="map-screen">
   <div id="map"></div>
   <div id="map-ui">
     <div id="map-top">
@@ -852,18 +863,13 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
 <!-- ══════ NAVIGATION HELPERS ══════ -->
 <script>
 function openMap() {
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  const mapScreen = document.getElementById('map-screen');
-  mapScreen.classList.add('active');
-  // Leaflet legge le dimensioni del container dopo il repaint CSS.
-  // requestAnimationFrame garantisce che display:block sia applicato
-  // prima che Leaflet misuri l'altezza del container.
+  // Nascondi tutte le schermate (solo quelle con classe screen)
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  // Mostra map-screen (non ha classe screen — ha il suo CSS)
+  document.getElementById('map-screen').classList.add('active');
+  // Init dopo il repaint del browser
   requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      if (!window.MapModule) return;
-      MapModule.init();          // crea la mappa se non esiste
-      MapModule.invalidate?.();  // forza ricalcolo dimensioni se già esiste
-    });
+    if (window.MapModule) MapModule.init();
   });
 }
 function openNotes() {

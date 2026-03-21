@@ -38,23 +38,35 @@ const MapModule = (() => {
 
   // ─── INIT MAPPA ───────────────────────────────────────
   function init() {
-    if (_map) {
-      // Mappa già inizializzata — forza resize dopo repaint
-      requestAnimationFrame(() => _map.invalidateSize());
-      return;
-    }
-    // Verifica che il container esista e abbia dimensioni
     const container = document.getElementById('map');
     if (!container) { console.error('[map] #map container non trovato'); return; }
-    _map  = L.map('map', { zoomControl:false, attributionControl:false })
-              .setView([45.46, 9.19], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      { maxZoom:19 }).addTo(_map);
+
+    if (_map) {
+      // Mappa già inizializzata — forza resize e controlla tile
+      _map.invalidateSize();
+      console.log('[map] invalidateSize chiamato');
+      return;
+    }
+
+    console.log('[map] inizializzazione Leaflet...');
+    console.log('[map] container size:', container.offsetWidth, 'x', container.offsetHeight);
+
+    _map = L.map('map', {
+      zoomControl:       false,
+      attributionControl: false,
+    }).setView([45.46, 9.19], 13);
+
+    // Tile layer OpenStreetMap
+    // Il filtro dark-mode è applicato via CSS direttamente su #map
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+    }).addTo(_map);
+
     _poly = L.polyline([], { color:'#6c8eff', weight:4, opacity:.85 }).addTo(_map);
     _map.on('click', e => { if (_favMode) openFavModal(e.latlng); });
 
-    // Carica preferiti esistenti — usa requestId dedicato
     _loadFavorites();
+    console.log('[map] Leaflet inizializzato');
   }
 
   function _loadFavorites() {
