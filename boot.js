@@ -26,36 +26,36 @@ async function boot() {
   console.log('[boot] avvio in corso...');
 
   State.subscribe('SYSTEM_ERROR', ({ error }) => {
+    document.getElementById('boot-loader').style.display = 'none';
     UI.showError(error);
   });
 
   // Cascata di avvio
   State.subscribe('AUTH_NEED_SETUP', () => {
-    document.getElementById('auth-screen')?.classList.add('active');
+    document.getElementById('boot-loader').style.display = 'none';
+    document.getElementById('auth-screen').classList.add('active');
     UI.showStep('step-setup');
-    // Dentro step-setup mostra il benvenuto
-    setTimeout(() => {
-      if (typeof showWizStep === 'function') showWizStep('step-welcome');
-    }, 50);
+    setTimeout(() => { window.showWizStep?.('step-welcome'); }, 50);
   });
   State.subscribe('AUTH_NEED_PIN', () => {
-    document.getElementById('auth-screen')?.classList.add('active');
+    document.getElementById('boot-loader').style.display = 'none';
+    document.getElementById('auth-screen').classList.add('active');
     UI.showStep('step-lock');
   });
   State.subscribe('AUTH_NEED_RECOVERY', () => {
-    document.getElementById('auth-screen')?.classList.add('active');
-    if (typeof showRecovery === 'function') showRecovery();
-    else UI.showStep('step-recovery');
+    document.getElementById('boot-loader').style.display = 'none';
+    document.getElementById('auth-screen').classList.add('active');
+    window.showRecovery?.();
   });
 
   State.subscribe('AUTH_RECOVERY_VERIFIED', async ({ seed }) => {
-    // Mostra setup per impostare nuovo PIN sul device corrente
     window._recovSeed = seed;
-    document.getElementById('auth-screen')?.classList.add('active');
+    document.getElementById('boot-loader').style.display = 'none';
+    document.getElementById('auth-screen').classList.add('active');
     UI.showStep('step-setup');
     const pinSub = document.getElementById('pin-sub');
     if (pinSub) pinSub.textContent = 'Scegli un nuovo PIN per questo dispositivo.';
-    if (typeof showWizStep === 'function') showWizStep('step-pin');
+    window.showWizStep?.('step-pin');
   });
 
   State.subscribe('CRYPTO_PERSIST_SEED', ({ encryptedSeed }) => {
