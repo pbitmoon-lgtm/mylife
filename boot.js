@@ -10,6 +10,7 @@ import './crypto.js';
 import './db.js';       
 import './backup.js';   
 import './calendar.js'; 
+import './sync.js';     
 import UI       from './ui.js';
 
 // ─── STATO UI LOCALE ──────────────────────────────────

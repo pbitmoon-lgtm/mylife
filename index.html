@@ -880,6 +880,25 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
       </div>
     </div>
     <div class="s-group">
+      <div class="s-group-title">Web3 — Identità & Backup</div>
+      <div class="s-row">
+        <div class="s-item" onclick="document.getElementById('sync-alias-panel').classList.add('open')">
+          <div>
+            <div class="s-label">Registra alias (@nome)</div>
+            <div class="s-sub">Rubrica cieca su Arbitrum · Gas gratis</div>
+          </div>
+          <span style="color:var(--accent)">⛓</span>
+        </div>
+        <div class="s-item" onclick="document.getElementById('sync-arweave-panel').classList.add('open')">
+          <div>
+            <div class="s-label">Ancora backup su Arweave</div>
+            <div class="s-sub">Storage permanente · ~€0.005</div>
+          </div>
+          <span style="color:var(--accent)">🌐</span>
+        </div>
+      </div>
+    </div>
+    <div class="s-group">
       <div class="s-group-title">Dati</div>
       <div class="s-row">
         <div class="s-item" data-intent="INTENT_RESET_SYSTEM">
@@ -947,6 +966,93 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
     </div>
     <button class="btn" onclick="window.CalendarModule?.saveEvent()">Salva appuntamento</button>
     <button class="btn-ghost" onclick="window.CalendarModule?.closeEventForm()">Annulla</button>
+  </div>
+</div>
+
+
+<!-- SYNC: pannello registrazione alias -->
+<div class="side-panel" id="sync-alias-panel">
+  <div class="sp-header">
+    <div class="sp-title">⛓ Registra alias</div>
+    <button class="sp-close" onclick="document.getElementById('sync-alias-panel').classList.remove('open')">✕</button>
+  </div>
+  <div class="sp-body">
+    <div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:20px">
+      Il tuo alias è l'indirizzo pubblico per la chat P2P.<br><br>
+      Viene salvato <b style="color:var(--text)">in forma hashata</b> su Arbitrum —
+      nessuno può risalire al tuo nome dall'hash on-chain.<br><br>
+      <span style="color:var(--accent)">Il gas è pagato dal sistema. Nessuna crypto richiesta.</span>
+    </div>
+    <div style="position:relative;margin-bottom:10px">
+      <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);
+        color:var(--text2);font-size:14px">@</span>
+      <input class="mm-input" id="sync-alias-input"
+        placeholder="tuonome" maxlength="32"
+        style="padding-left:28px;text-transform:lowercase"
+        oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9_]/g,'')">
+    </div>
+    <div id="sync-alias-status" style="font-size:12px;margin-bottom:14px;min-height:16px;color:var(--text2)"></div>
+    <button class="btn" onclick="syncRegisterAlias()">Registra su Arbitrum →</button>
+    <button class="btn-ghost" onclick="document.getElementById('sync-alias-panel').classList.remove('open')">Annulla</button>
+  </div>
+</div>
+
+<!-- SYNC: pannello ancora Arweave -->
+<div class="side-panel" id="sync-arweave-panel">
+  <div class="sp-header">
+    <div class="sp-title">🌐 Ancora su Arweave</div>
+    <button class="sp-close" onclick="document.getElementById('sync-arweave-panel').classList.remove('open')">✕</button>
+  </div>
+  <div class="sp-body">
+    <div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:20px">
+      Carica il tuo backup <code style="color:var(--accent)">.enc</code> su Arweave —
+      una rete di storage permanente e decentralizzata.<br><br>
+      Il file è già cifrato con la tua password di backup.
+      Nessuno può leggerlo senza di essa.<br><br>
+      <span style="color:var(--warn)">⚠️ Costo: ~€0.005 per file, pagamento in ETH richiesto per file >100KB</span>
+    </div>
+    <div id="sync-arweave-dropzone"
+      style="border:2px dashed var(--border);border-radius:14px;padding:32px;
+             text-align:center;cursor:pointer;margin-bottom:14px"
+      onclick="document.getElementById('sync-enc-in').click()">
+      <div style="font-size:32px;margin-bottom:8px">📦</div>
+      <div id="sync-arweave-filename" style="font-size:13px;color:var(--text2)">
+        Seleziona file .enc...
+      </div>
+    </div>
+    <input type="file" id="sync-enc-in" accept=".enc" style="display:none"
+      onchange="onSyncEncSelected(this)">
+    <div id="sync-arweave-status" style="font-size:12px;margin-bottom:14px;min-height:16px"></div>
+    <button class="btn" id="sync-arweave-btn" onclick="syncAnchorBackup()" disabled>
+      Ancora su Arweave →
+    </button>
+    <button class="btn-ghost" onclick="document.getElementById('sync-arweave-panel').classList.remove('open')">Annulla</button>
+  </div>
+</div>
+
+<!-- SYNC: stato transazione (overlay) -->
+<div id="sync-tx-overlay" style="display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.8);z-index:200;align-items:center;justify-content:center;
+  backdrop-filter:blur(8px)">
+  <div style="background:#13131f;border:1px solid var(--border);border-radius:20px;
+    padding:28px 24px;max-width:320px;width:90%;text-align:center">
+    <div style="font-size:36px;margin-bottom:12px" id="sync-tx-icon">⏳</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:8px" id="sync-tx-title">
+      Invio in corso...
+    </div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.6" id="sync-tx-msg">
+      Il Paymaster sta sponsorizzando la transazione.
+    </div>
+    <div id="sync-tx-link" style="margin-top:16px;display:none">
+      <a id="sync-tx-explorer" href="#" target="_blank"
+        style="font-size:12px;color:var(--accent);text-decoration:underline">
+        Vedi su Arbiscan →
+      </a>
+    </div>
+    <button id="sync-tx-close" style="display:none;margin-top:16px"
+      class="btn" onclick="document.getElementById('sync-tx-overlay').style.display='none'">
+      Chiudi
+    </button>
   </div>
 </div>
 
@@ -1224,6 +1330,90 @@ function updateHomeTime() {
     ' · ' + n.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'});
 }
 setInterval(updateHomeTime, 30000);
+</script>
+
+
+<script>
+// ─── SYNC HELPERS ─────────────────────────────────────
+let _syncEncBuffer = null;
+
+function onSyncEncSelected(inp) {
+  const file = inp.files[0];
+  if (!file) return;
+  document.getElementById('sync-arweave-filename').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = e => {
+    _syncEncBuffer = e.target.result;
+    document.getElementById('sync-arweave-btn').disabled = false;
+    document.getElementById('sync-arweave-status').textContent = 
+      `File: ${file.name} (${Math.round(file.size/1024)} KB)`;
+    document.getElementById('sync-arweave-status').style.color = 'var(--text2)';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function syncAnchorBackup() {
+  if (!_syncEncBuffer) return;
+  showSyncOverlay('⏳', 'Upload in corso...', 'Caricamento su Arweave...');
+  
+  // Ascolta risposta
+  const unsubOk = window.__State?.once('SYNC_ARWEAVE_COMPLETE', ({ txId, url, sizeKB }) => {
+    unsubErr();
+    showSyncOverlay('✅', 'Anchored!', 
+      `File permanentemente archiviato (${sizeKB} KB)`, url, txId.slice(0,8)+'...');
+  });
+  const unsubErr = window.__State?.once('SYNC_ARWEAVE_ERROR', ({ error }) => {
+    unsubOk();
+    showSyncOverlay('❌', 'Errore upload', error);
+    setTimeout(() => document.getElementById('sync-tx-overlay').style.display='none', 3000);
+  });
+
+  window.SyncModule?.anchorBackup(_syncEncBuffer);
+}
+
+async function syncRegisterAlias() {
+  const alias = document.getElementById('sync-alias-input')?.value.trim();
+  if (!alias) return;
+  
+  const status = document.getElementById('sync-alias-status');
+  if (status) { status.textContent = '🔍 Verifica disponibilità...'; status.style.color='var(--text2)'; }
+  
+  showSyncOverlay('⏳', `Registrazione @${alias}`, 'Il Paymaster sta sponsorizzando il gas...');
+
+  const unsubOk = window.__State?.once('SYNC_REG_COMPLETE', ({ alias, txHash, explorerUrl }) => {
+    unsubErr();
+    if (status) { status.textContent = `✅ @${alias} registrato`; status.style.color='var(--green)'; }
+    showSyncOverlay('✅', `@${alias} registrato!`,
+      'Il tuo alias è ora sulla blockchain.', explorerUrl, txHash.slice(0,10)+'...');
+    document.getElementById('sync-alias-panel').classList.remove('open');
+  });
+  const unsubErr = window.__State?.once('SYNC_REG_ERROR', ({ error }) => {
+    unsubOk();
+    if (status) { status.textContent = '❌ ' + error; status.style.color='var(--red)'; }
+    document.getElementById('sync-tx-overlay').style.display = 'none';
+  });
+
+  window.SyncModule?.registerAlias(alias, 'placeholder_pubkey');
+}
+
+function showSyncOverlay(icon, title, msg, url, txShort) {
+  document.getElementById('sync-tx-icon').textContent  = icon;
+  document.getElementById('sync-tx-title').textContent = title;
+  document.getElementById('sync-tx-msg').textContent   = msg;
+  const linkDiv = document.getElementById('sync-tx-link');
+  const closeBtn = document.getElementById('sync-tx-close');
+  if (url) {
+    document.getElementById('sync-tx-explorer').href = url;
+    document.getElementById('sync-tx-explorer').textContent = 
+      `${txShort || 'Vedi'} su explorer →`;
+    linkDiv.style.display = 'block';
+    closeBtn.style.display = 'block';
+  } else {
+    linkDiv.style.display  = 'none';
+    closeBtn.style.display = 'none';
+  }
+  document.getElementById('sync-tx-overlay').style.display = 'flex';
+}
 </script>
 
 <!-- ENTRY POINT ES MODULE -->
