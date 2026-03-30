@@ -38,18 +38,18 @@ const SyncModule = (() => {
       label:           'Arbitrum Sepolia',
     },
 
-    // Arbitrum Nova — mainnet consumer (obiettivo finale)
+    // Arbitrum Nova — mainnet consumer
     nova: {
       rpc:             'https://nova.arbitrum.io/rpc',
       chainId:         42170,
-      registryAddress: '0x0000000000000000000000000000000000000000', // TODO: deploy
+      registryAddress: '0x64bae1f178e0e77f8c3200e1e3737a444c5683da',
       explorerBase:    'https://nova.arbiscan.io',
       label:           'Arbitrum Nova',
     },
   };
 
-  // Rete attiva — cambia in 'sepolia' o 'nova' quando deployi lì
-  let _activeNetwork = 'local';
+  // Rete attiva
+  let _activeNetwork = 'nova';
   const CONFIG = () => NETWORKS[_activeNetwork];
 
   // ─── STATO INTERNO ────────────────────────────────────
