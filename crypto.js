@@ -93,6 +93,8 @@ const CryptoEngine = (() => {
         State.dispatch('CRYPTO_PERSIST_SEED', {
           encryptedSeed: Array.from(encSeed)
         });
+        // Rende il seed disponibile al wallet module (solo durante setup)
+        State.dispatch('SEED_AVAILABLE', { seed });
       }
 
       State.dispatch('CRYPTO_KEY_DERIVED', { isSetup, words });

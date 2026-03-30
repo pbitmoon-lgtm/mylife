@@ -1061,6 +1061,9 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
 
 <!-- PIN PAD + NAVIGATION + SETUP LOGIC -->
 
+<!-- ethers.js — firma transazioni senza MetaMask -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+
 <!-- ENTRY POINT — unico script, tutto via moduli ES -->
 <script type="module">
 import State      from './state.js';
@@ -1068,6 +1071,8 @@ import Hardware   from './hardware.js';
 import UI         from './ui.js';
 import Onboarding from './onboarding.js';
 import Navigation from './navigation.js';
+import WalletModule from './wallet.js';
+import MarketplaceModule from './marketplace.js';
 import './map.js';
 import './notes.js';
 import './chat.js';

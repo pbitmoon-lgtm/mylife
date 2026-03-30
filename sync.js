@@ -79,93 +79,38 @@ const SyncModule = (() => {
       .map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
-  // ─── PROVIDER (MetaMask o RPC diretto) ────────────────
+  // ─── PROVIDER (wallet embedded via ethers.js) ─────────
+  // Non usa MetaMask — firma internamente con chiave derivata dal seed
 
-  async function _getProvider() {
-    // Usa MetaMask se disponibile
-    if (window.ethereum) return window.ethereum;
-    // Fallback: RPC diretto (read-only)
-    if (CONFIG().rpc) return null; // gestito in _ethCall
-    throw new Error('Nessun provider disponibile. Installa MetaMask.');
+  async function _getEthersWallet() {
+    const privKeyHex = window.WalletModule?.getPrivateKeyHex?.();
+    if (!privKeyHex) throw new Error('Wallet non inizializzato. Fai login prima.');
+    const provider = new ethers.JsonRpcProvider(CONFIG().rpc);
+    return new ethers.Wallet('0x' + privKeyHex, provider);
   }
 
   async function _sendTransaction(calldata) {
-    const provider = await _getProvider();
-    if (!provider) throw new Error('MetaMask non disponibile');
-
-    const accounts = await provider.request({ method: 'eth_requestAccounts' });
-    const from = accounts[0];
-
-    // Verifica rete corretta
-    const chainIdHex = await provider.request({ method: 'eth_chainId' });
-    const chainId = parseInt(chainIdHex, 16);
-    if (chainId !== CONFIG().chainId) {
-      throw new Error(
-        `Rete sbagliata. Seleziona "${CONFIG().label}" in MetaMask (chainId: ${CONFIG().chainId})`
-      );
-    }
-
-    const txHash = await provider.request({
-      method: 'eth_sendTransaction',
-      params: [{ from, to: CONFIG().registryAddress, data: calldata }],
+    const wallet = await _getEthersWallet();
+    const tx = await wallet.sendTransaction({
+      to:   CONFIG().registryAddress,
+      data: calldata,
     });
-
-    return txHash;
+    console.log('[sync] tx inviata:', tx.hash);
+    return tx.hash;
   }
 
   async function _ethCall(calldata) {
-    // Usa MetaMask se disponibile, altrimenti RPC diretto
-    if (window.ethereum) {
-      const result = await window.ethereum.request({
-        method: 'eth_call',
-        params: [{ to: CONFIG().registryAddress, data: calldata }, 'latest'],
-      });
-      return result;
-    }
-
-    // Fallback RPC diretto
-    if (!CONFIG().rpc) throw new Error('Nessun RPC configurato');
-    const res = await fetch(CONFIG().rpc, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0', id: 1, method: 'eth_call',
-        params: [{ to: CONFIG().registryAddress, data: calldata }, 'latest'],
-      }),
+    const provider = new ethers.JsonRpcProvider(CONFIG().rpc);
+    return await provider.call({
+      to:   CONFIG().registryAddress,
+      data: calldata,
     });
-    const { result, error } = await res.json();
-    if (error) throw new Error(error.message);
-    return result;
   }
 
-  async function _waitConfirmation(txHash, maxAttempts = 20) {
-    const rpc = CONFIG().rpc || 'http://localhost:8545';
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise(r => setTimeout(r, 2000));
-      try {
-        let result;
-        if (window.ethereum) {
-          result = await window.ethereum.request({
-            method: 'eth_getTransactionReceipt',
-            params: [txHash],
-          });
-        } else {
-          const res = await fetch(rpc, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              jsonrpc: '2.0', id: 1,
-              method: 'eth_getTransactionReceipt',
-              params: [txHash],
-            }),
-          });
-          result = (await res.json()).result;
-        }
-        if (result?.status === '0x1') return true;
-        if (result?.status === '0x0') return false;
-      } catch { /* continua polling */ }
-    }
-    return false;
+  async function _waitConfirmation(txHash) {
+    const provider = new ethers.JsonRpcProvider(CONFIG().rpc);
+    const receipt  = await provider.waitForTransaction(txHash, 1, 60000);
+    return receipt?.status === 1;
   }
 
   // ─── ABI ENCODING ─────────────────────────────────────
