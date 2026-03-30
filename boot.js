@@ -1,73 +1,40 @@
 // ═══════════════════════════════════════════════════════
-// My Life — boot.js (PRODUZIONE - CORRETTO E BLINDATO)
-// Unico punto di ingresso dell'applicazione.
-// Blocca il rendering finché l'ambiente è stabile.
+// My Life — boot.js
+// Unico punto di ingresso. Solo orchestrazione.
+// Non contiene logica UI, PIN, o navigazione.
 // ═══════════════════════════════════════════════════════
 
 import State    from './state.js';
 import Hardware from './hardware.js';
-import './crypto.js';   
-import './db.js';       
-import './backup.js';   
-import './calendar.js'; 
-import './sync.js';     
 import UI       from './ui.js';
+import './crypto.js';
+import './db.js';
+import './backup.js';
+import './calendar.js';
+import './sync.js';
 
-// ─── STATO UI LOCALE ──────────────────────────────────
-let _setupPin   = '';
-let _confirmPin = '';
-let _recovMode  = false;
-let _recovSeed  = null;
-let _recovWords = [];
-let _verifyIdx  = [];
-let _pinLocked  = false;
-
-// ─── BOOT SEQUENCE ────────────────────────────────────
 async function boot() {
   console.log('[boot] avvio in corso...');
 
-  State.subscribe('AUTH_FAILED', ({ reason }) => {
-    document.getElementById('boot-loader').style.display = 'none';
-    if (reason === 'invalid_words') {
-      const err = document.getElementById('rec-err');
-      if (err) { err.style.color='var(--red)'; err.textContent='❌ Parole non corrette.'; }
-    } else {
-      // PIN sbagliato — feedback visivo
-      window.pinError?.();
-    }
-  });
-
   State.subscribe('SYSTEM_ERROR', ({ error }) => {
-    document.getElementById('boot-loader').style.display = 'none';
+    _hideLoader();
     UI.showError(error);
   });
 
-  // Cascata di avvio
   State.subscribe('AUTH_NEED_SETUP', () => {
-    document.getElementById('boot-loader').style.display = 'none';
-    document.getElementById('auth-screen').classList.add('active');
+    _hideLoader(); _showAuth();
     UI.showStep('step-setup');
-    setTimeout(() => { window.showWizStep?.('step-welcome'); }, 50);
-  });
-  State.subscribe('AUTH_NEED_PIN', () => {
-    document.getElementById('boot-loader').style.display = 'none';
-    document.getElementById('auth-screen').classList.add('active');
-    UI.showStep('step-lock');
-  });
-  State.subscribe('AUTH_NEED_RECOVERY', () => {
-    document.getElementById('boot-loader').style.display = 'none';
-    document.getElementById('auth-screen').classList.add('active');
-    window.showRecovery?.();
+    setTimeout(() => window.Onboarding?.showWizStep('step-welcome'), 50);
   });
 
-  State.subscribe('AUTH_RECOVERY_VERIFIED', async ({ seed }) => {
-    window._recovSeed = seed;
-    document.getElementById('boot-loader').style.display = 'none';
-    document.getElementById('auth-screen').classList.add('active');
-    UI.showStep('step-setup');
-    const pinSub = document.getElementById('pin-sub');
-    if (pinSub) pinSub.textContent = 'Scegli un nuovo PIN per questo dispositivo.';
-    window.showWizStep?.('step-pin');
+  State.subscribe('AUTH_NEED_PIN', () => {
+    _hideLoader(); _showAuth();
+    UI.showStep('step-lock');
+  });
+
+  State.subscribe('AUTH_NEED_RECOVERY', () => {
+    _hideLoader(); _showAuth();
+    window.Onboarding?.showRecovery();
   });
 
   State.subscribe('CRYPTO_PERSIST_SEED', ({ encryptedSeed }) => {
@@ -76,25 +43,20 @@ async function boot() {
 
   State.subscribe('APP_READY', () => {
     UI.hideError();
-    const loader = document.getElementById('boot-loader');
-    const auth   = document.getElementById('auth-screen');
-    const home   = document.getElementById('home-screen');
-    if (loader) loader.style.display = 'none';
-    if (auth)   auth.classList.remove('active');
-    if (home)   home.classList.add('active');
-    // Aggiorna orario home
-    const timeEl = document.getElementById('home-time');
-    if (timeEl) {
-      const n = new Date();
-      timeEl.textContent = n.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}) +
-        ' · ' + n.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'});
-    }
+    _hideLoader(); _hideAuth(); _showHome();
     console.log('[boot] ✅ Sistema sbloccato e pronto.');
-    // Aggiorna badge note nel widget home
     setTimeout(() => {
-      State.dispatch('INTENT_LOAD_RECORDS', { type:'note', requestId:'home_badge' });
+      State.dispatch('INTENT_LOAD_RECORDS', { type: 'note', requestId: 'home_badge' });
     }, 500);
   });
+
+  State.subscribe('UPDATE_AVAILABLE', () => {
+    const banner = document.getElementById('update-banner');
+    if (banner) banner.style.display = 'flex';
+  });
+
+  _initGlobalIntents();
+  _initZkWorker();
 
   try {
     await Hardware.checkAndBoot();
@@ -103,161 +65,104 @@ async function boot() {
   }
 }
 
-// ─── EVENT DELEGATION (IL MURO DI GOMMA) ──────────────
-// Intercetta tutti i click dell'HTML senza usare funzioni globali
-document.addEventListener('click', e => {
-  const intentElement = e.target.closest('[data-intent]');
-  if (!intentElement) return;
+function _hideLoader() { const el = document.getElementById('boot-loader'); if (el) el.style.display = 'none'; }
+function _showAuth()   { document.getElementById('auth-screen')?.classList.add('active'); }
+function _hideAuth()   { document.getElementById('auth-screen')?.classList.remove('active'); }
+function _showHome()   { document.getElementById('home-screen')?.classList.add('active'); }
 
-  const intent = intentElement.dataset.intent;
-
-  switch (intent) {
-    case 'INTENT_LOCK_APP':
-      State.dispatch('CRYPTO_LOCK');
-      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-      document.getElementById('auth-screen').classList.add('active');
-      UI.showStep('step-lock');
-      break;
-
-    case 'INTENT_START_RECOVERY':
-      State.dispatch('AUTH_NEED_RECOVERY');
-      break;
-
-    case 'INTENT_RESET_SYSTEM':
-      if (confirm('ATTENZIONE: Distruggere irreversibilmente tutti i dati locali?')) {
-        State.dispatch('INTENT_CLEAR_ALL');
-        localStorage.clear();
-        location.reload();
+function _initGlobalIntents() {
+  document.addEventListener('click', e => {
+    const el = e.target.closest('[data-intent]');
+    if (!el) return;
+    switch (el.dataset.intent) {
+      case 'INTENT_LOCK_APP':
+        State.dispatch('CRYPTO_LOCK');
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        _showAuth(); UI.showStep('step-lock');
+        break;
+      case 'INTENT_START_RECOVERY':
+        State.dispatch('AUTH_NEED_RECOVERY');
+        break;
+      case 'INTENT_RESET_SYSTEM':
+        if (confirm('ATTENZIONE: Distruggere irreversibilmente tutti i dati locali?')) {
+          State.dispatch('INTENT_CLEAR_ALL');
+          localStorage.clear();
+          location.reload();
+        }
+        break;
+      case 'INTENT_RESTORE_BACKUP': {
+        const pwd = document.getElementById('backup-pwd')?.value;
+        const err = document.getElementById('restore-err');
+        const prog = document.getElementById('restore-progress');
+        const fileBuf = window._restoreFileBuffer;
+        if (!fileBuf) { if (err) err.textContent = 'Seleziona un file .enc'; return; }
+        if (!pwd)     { if (err) err.textContent = 'Inserisci la password di backup'; return; }
+        if (!confirm('Ripristinare il backup? I dati correnti verranno sovrascritti irreversibilmente.')) return;
+        if (err) err.textContent = '';
+        if (prog) prog.style.display = 'block';
+        el.disabled = true;
+        const unsubOk = State.subscribe('BACKUP_RESTORED', ({ recordCount }) => {
+          unsubOk(); unsubErr();
+          if (prog) prog.style.display = 'none';
+          el.disabled = false;
+          document.getElementById('restore-panel')?.classList.remove('open');
+          alert(`✅ Ripristino completato: ${recordCount} record ripristinati.`);
+          location.reload();
+        });
+        const unsubErr = State.subscribe('RESTORE_ERROR', ({ error }) => {
+          unsubOk(); unsubErr();
+          if (prog) prog.style.display = 'none';
+          el.disabled = false;
+          if (err) err.textContent = '❌ ' + error;
+        });
+        State.dispatch('INTENT_RESTORE_VAULT', { fileBuffer: fileBuf, password: pwd });
+        break;
       }
-      break;
-
-    case 'INTENT_RESTORE_BACKUP':
-      // Gestione sicura del ripristino Backup
-      const pwd = document.getElementById('backup-pwd').value;
-      const err = document.getElementById('restore-err');
-      const prog = document.getElementById('restore-progress');
-      const fileBuffer = window._restoreFileBuffer; // Letto dalla UI, sicuro.
-
-      if (!fileBuffer) { err.textContent = 'Seleziona un file .enc'; return; }
-      if (!pwd) { err.textContent = 'Inserisci la password di backup'; return; }
-      if (!confirm('Ripristinare il backup? I dati correnti verranno sovrascritti irreversibilmente.')) return;
-
-      err.textContent = '';
-      prog.style.display = 'block';
-      intentElement.disabled = true;
-
-      const unsubOk = State.subscribe('BACKUP_RESTORED', ({ recordCount }) => {
-        unsubOk(); unsubErr();
-        prog.style.display = 'none';
-        intentElement.disabled = false;
-        document.getElementById('restore-panel').classList.remove('open');
-        alert(`✅ Ripristino completato con successo: ${recordCount} record ripristinati.`);
-        location.reload(); // Riavvia l'app per caricare i nuovi dati
-      });
-
-      const unsubErr = State.subscribe('RESTORE_ERROR', ({ error }) => {
-        unsubOk(); unsubErr();
-        prog.style.display = 'none';
-        intentElement.disabled = false;
-        err.textContent = '❌ ' + error;
-      });
-
-      State.dispatch('INTENT_RESTORE_VAULT', {
-        fileBuffer: fileBuffer,
-        password: pwd
-      });
-      break;
-  }
-});
-
-// ─── ZK WORKER — SINGLETON E GRACEFUL SHUTDOWN ────────
-let _zkWorker = null;
-const _deadLetterQueue = [];
-
-State.subscribe('APP_READY', () => {
-  // Ripristina eventuali lavori interrotti
-  if (_deadLetterQueue.length > 0) {
-    console.log(`[boot] Ripristino ${_deadLetterQueue.length} job dalla coda di emergenza`);
-    State.dispatch('ZK_RETRY_QUEUED_JOBS', { jobs: [..._deadLetterQueue] });
-    _deadLetterQueue.length = 0;
-  }
-
-  // Singleton — crea il Worker solo se non esiste
-  if (_zkWorker) return;
-
-  try {
-    _zkWorker = new Worker('./zk-worker.js');
-    _zkWorker.onmessage = e => {
-      if (e.data.type === 'WORKER_READY') {
-        State.dispatch('ZK_WORKER_READY');
-      } else {
-        State.dispatch('ZK_WORKER_MESSAGE', e.data);
-      }
-    };
-    _zkWorker.onerror = err => {
-      console.warn('[boot] ZK worker errore:', err.message);
-      _zkWorker = null;
-    };
-
-    // Notifica il Worker quando l'app va in background/foreground
-    // Previene background throttling (setTimeout clamp a 1000ms su mobile)
-    document.addEventListener('visibilitychange', () => {
-      if (!_zkWorker) return;
-      if (document.hidden) {
-        _zkWorker.postMessage({ type: 'APP_BACKGROUND' });
-        State.dispatch('ZK_PAUSED');
-      } else {
-        _zkWorker.postMessage({ type: 'APP_FOREGROUND' });
-        State.dispatch('ZK_RESUMED');
-      }
-    });
-
-  } catch (e) {
-    console.warn('[boot] Web Worker non supportato:', e.message);
-  }
-});
-
-// Spegnimento sicuro (Graceful Shutdown)
-State.subscribe('CRYPTO_LOCKED', () => {
-  if (!_zkWorker) return;
-
-  const SHUTDOWN_TIMEOUT_MS = 2000;
-  const forceKill = setTimeout(() => {
-    if (_zkWorker) { _zkWorker.terminate(); _zkWorker = null; }
-  }, SHUTDOWN_TIMEOUT_MS);
-
-  const onShutdownAck = e => {
-    if (e.data?.type !== 'SHUTDOWN_ACK') return;
-    clearTimeout(forceKill);
-    _zkWorker.removeEventListener('message', onShutdownAck);
-
-    // Salva i lavori interrotti nella coda
-    const pendingJobs = e.data.pendingJobs || [];
-    if (pendingJobs.length > 0) {
-      _deadLetterQueue.push(...pendingJobs);
     }
+  });
+}
 
-    _zkWorker.terminate();
-    _zkWorker = null;
-  };
+function _initZkWorker() {
+  let _worker = null;
+  const _deadLetterQueue = [];
+  State.subscribe('APP_READY', () => {
+    if (_deadLetterQueue.length > 0) {
+      State.dispatch('ZK_RETRY_QUEUED_JOBS', { jobs: [..._deadLetterQueue] });
+      _deadLetterQueue.length = 0;
+    }
+    if (_worker) return;
+    try {
+      _worker = new Worker('./zk-worker.js');
+      _worker.onmessage = e => {
+        if (e.data.type === 'WORKER_READY') State.dispatch('ZK_WORKER_READY');
+        else State.dispatch('ZK_WORKER_MESSAGE', e.data);
+      };
+      _worker.onerror = err => { console.warn('[boot] ZK worker errore:', err.message); _worker = null; };
+      document.addEventListener('visibilitychange', () => {
+        if (!_worker) return;
+        if (document.hidden) { _worker.postMessage({ type: 'APP_BACKGROUND' }); State.dispatch('ZK_PAUSED'); }
+        else { _worker.postMessage({ type: 'APP_FOREGROUND' }); State.dispatch('ZK_RESUMED'); }
+      });
+    } catch (e) { console.warn('[boot] Web Worker non supportato:', e.message); }
+  });
+  State.subscribe('CRYPTO_LOCKED', () => {
+    if (!_worker) return;
+    const forceKill = setTimeout(() => { if (_worker) { _worker.terminate(); _worker = null; } }, 2000);
+    const onAck = e => {
+      if (e.data?.type !== 'SHUTDOWN_ACK') return;
+      clearTimeout(forceKill);
+      _worker.removeEventListener('message', onAck);
+      const pending = e.data.pendingJobs || [];
+      if (pending.length > 0) _deadLetterQueue.push(...pending);
+      _worker.terminate(); _worker = null;
+    };
+    _worker.addEventListener('message', onAck);
+    _worker.postMessage({ type: 'INTENT_SHUTDOWN' });
+  });
+}
 
-  _zkWorker.addEventListener('message', onShutdownAck);
-  _zkWorker.postMessage({ type: 'INTENT_SHUTDOWN' });
-});
-
-// Ascolta aggiornamenti critici dal Service Worker
-// Se c'è una nuova versione dei file → mostra banner di sicurezza
 navigator.serviceWorker?.addEventListener('message', event => {
-  if (event.data?.type === 'UPDATE_AVAILABLE') {
-    State.dispatch('UPDATE_AVAILABLE');
-  }
+  if (event.data?.type === 'UPDATE_AVAILABLE') State.dispatch('UPDATE_AVAILABLE');
 });
 
-State.subscribe('UPDATE_AVAILABLE', () => {
-  // Banner non intrusivo — l'utente sceglie quando ricaricare
-  const banner = document.getElementById('update-banner');
-  if (banner) banner.style.display = 'flex';
-});
-
-// Si avvia automaticamente quando importato
 boot();

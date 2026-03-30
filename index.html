@@ -421,7 +421,6 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
 #chat-img-full{max-width:95vw;max-height:90vh;border-radius:12px;object-fit:contain}
 
 </style>
-</head>
 <body>
 
 <!-- ERROR BANNER -->
@@ -1061,280 +1060,44 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
   onchange="window.MapModule?.onImport(this)">
 
 <!-- PIN PAD + NAVIGATION + SETUP LOGIC -->
-<script>
-// ─── WIZARD STEPS (interno al setup) ─────────────────
-// Questi step vivono DENTRO step-setup, non nel auth-screen direttamente
-function showWizStep(id) {
-  ['step-welcome','step-pin','step-confirm','step-phrase','step-verify']
-    .forEach(s => {
-      const el = document.getElementById(s);
-      if (el) el.style.display = 'none';
-    });
-  const el = document.getElementById(id);
-  if (el) el.style.display = 'flex';
-  if (id === 'step-verify') buildVerifyUI();
-}
 
-// ─── SETUP PIN STATE ──────────────────────────────────
-let _setupPin = '', _confirmPin = '', _recovWords = [], _verifyIdx = [];
-let _pinLocked = false, _confirming = false;
+<!-- ENTRY POINT — unico script, tutto via moduli ES -->
+<script type="module">
+import State      from './state.js';
+import Hardware   from './hardware.js';
+import UI         from './ui.js';
+import Onboarding from './onboarding.js';
+import Navigation from './navigation.js';
+import './map.js';
+import './notes.js';
+import './chat.js';
+import './boot.js';
 
-function setupKey(d) {
-  if (_setupPin.length >= 6) return;
-  _setupPin += d;
-  updDots('setup-dots', 's', _setupPin.length);
-  if (_setupPin.length === 6) setTimeout(() => showWizStep('step-confirm'), 200);
-}
-function setupDel() {
-  _setupPin = _setupPin.slice(0,-1);
-  updDots('setup-dots', 's', _setupPin.length);
-}
+// Esponi ai pulsanti HTML (onclick="...")
+window.Hardware    = Hardware;
+window.Onboarding  = Onboarding;
 
-async function confirmKey(d) {
-  if (_confirming || _confirmPin.length >= 6) return;
-  _confirmPin += d;
-  updDots('confirm-dots', 'c', _confirmPin.length);
-  if (_confirmPin.length === 6) {
-    if (_confirmPin !== _setupPin) {
-      setDotsState('confirm-dots', 'c', 'err');
-      setTimeout(() => { _confirmPin=''; updDots('confirm-dots','c',0); }, 800);
-      return;
-    }
-    _confirming = true;
-    const sub = document.getElementById('confirm-sub');
-    if (sub) sub.textContent = '⚙️ Configurazione...';
-    try {
-      if (window._recovSeed) {
-        // Recovery: migra su questo device con il seed recuperato
-        await window.Hardware?.migrateWithPin(_setupPin, window._recovSeed);
-        window._recovSeed = null;
-      } else {
-        // Primo avvio: crea nuovo account
-        await window.Hardware?.setupWithPin(_setupPin);
-      }
-    } catch(e) {
-      _confirming = false;
-      console.error('setup error:', e);
-    }
-  }
-}
-function confirmDel() {
-  if (_confirming) return;
-  _confirmPin = _confirmPin.slice(0,-1);
-  updDots('confirm-dots','c', _confirmPin.length);
-}
+// Navigazione
+window.openMap      = () => Navigation.openMap();
+window.openNotes    = () => Navigation.openNotes();
+window.openChat     = () => Navigation.openChat();
+window.openSettings = () => Navigation.openSettings();
+window.openCalendar = () => Navigation.openCalendar();
+window.closeSection = (id) => Navigation.closeSection(id);
 
-// Dopo AUTH_SUCCESS_PRF, crypto.js emette CRYPTO_KEY_DERIVED con le parole
-// boot.js gestisce APP_READY, ma le parole vengono mostrate qui
-// tramite evento che boot.js non usa — subscribe diretto
-document.addEventListener('DOMContentLoaded', () => {
-  // Ascolta words dal crypto per mostrarle nel wizard
-  if (window._State_subscribe) {
-    window._State_subscribe('CRYPTO_KEY_DERIVED', ({ isSetup, words }) => {
-      if (!isSetup || !words) return;
-      _recovWords = words;
-      const grid = document.getElementById('phrase-grid');
-      if (grid) grid.innerHTML = words.map((w,i) =>
-        `<div class="phrase-word">
-          <span class="pnum">${String(i+1).padStart(2,'0')}</span>
-          <span class="pword">${w}</span>
-        </div>`
-      ).join('');
-      showWizStep('step-phrase');
-    });
-  }
-});
+// Wizard onboarding
+window.showWizStep  = (id) => Onboarding.showWizStep(id);
+window.showRecovery = () => Onboarding.showRecovery();
+window.doRecovery   = () => Onboarding.doRecovery();
+window.finishSetup  = () => Onboarding.finishSetup();
 
-function buildVerifyUI() {
-  _verifyIdx = [];
-  while (_verifyIdx.length < 4) {
-    const n = Math.floor(Math.random()*12);
-    if (!_verifyIdx.includes(n)) _verifyIdx.push(n);
-  }
-  _verifyIdx.sort((a,b)=>a-b);
-  const grid = document.getElementById('verify-grid');
-  if (!grid) return;
-  grid.innerHTML = _verifyIdx.map(i =>
-    `<div class="rrow">
-      <span class="rnum">#${i+1}</span>
-      <input class="rinput" data-i="${i}" placeholder="parola ${i+1}..."
-        autocomplete="off" spellcheck="false">
-    </div>`
-  ).join('');
-  document.querySelectorAll('#verify-grid .rinput').forEach(inp => {
-    inp.addEventListener('input', checkVerify);
-  });
-}
-
-function checkVerify() {
-  let ok = true;
-  document.querySelectorAll('#verify-grid .rinput').forEach(inp => {
-    const v = inp.value.trim().toLowerCase();
-    if (!v) { inp.className='rinput'; ok=false; }
-    else if (v === _recovWords[+inp.dataset.i]) inp.className='rinput ok';
-    else { inp.className='rinput err'; ok=false; }
-  });
-  const btn = document.getElementById('verify-btn');
-  if (btn) btn.disabled = !ok;
-}
-
-function finishSetup() {
-  window.Hardware?.markBackupVerified();
-}
-
-// ─── LOCK PIN STATE ───────────────────────────────────
-let _lockPin = '';
-
-async function lockKey(d) {
-  if (_pinLocked || _lockPin.length >= 6) return;
-  _lockPin += d;
-  updDots('lock-dots', 'd', _lockPin.length);
-  if (_lockPin.length === 6) {
-    _pinLocked = true;
-    const sub = document.getElementById('lock-sub');
-    if (sub) sub.textContent = '🔓 Verifica...';
-    try {
-      await window.Hardware?.unlockWithPin(_lockPin);
-    } catch(e) {
-      pinError();
-    }
-  }
-}
-
-function lockDel() {
-  if (_pinLocked) return;
-  if (_lockPin.length > 0) {
-    _lockPin = _lockPin.slice(0,-1);
-    updDots('lock-dots', 'd', _lockPin.length);
-  }
-}
-
-function pinError() {
-  setDotsState('lock-dots', 'd', 'err');
-  const sub = document.getElementById('lock-sub');
-  if (sub) sub.textContent = 'PIN errato. Riprova.';
-  if (navigator.vibrate) navigator.vibrate([80,40,80]);
-  setTimeout(() => {
-    _lockPin = ''; _pinLocked = false;
-    updDots('lock-dots','d',0);
-    if (sub) sub.textContent = 'La tua privacy, sulla chain, per sempre';
-  }, 900);
-}
-
-// ─── RECOVERY ─────────────────────────────────────────
-function showRecovery() {
-  // Costruisce la griglia delle 12 parole
-  const grid = document.getElementById('rec-grid');
-  if (!grid) return;
-  grid.innerHTML = Array.from({length:12},(_,i) =>
-    `<div class="rrow">
-      <span class="rnum">#${i+1}</span>
-      <input class="rinput" id="rw${i}" placeholder="parola ${i+1}..."
-        autocomplete="off" spellcheck="false" style="text-transform:lowercase">
-    </div>`
-  ).join('');
-  // Mostra step-recovery
-  if (window.UI) window.UI.showStep('step-recovery');
-}
-
-async function doRecovery() {
-  const words = Array.from({length:12},(_,i) => {
-    const el = document.getElementById('rw'+i);
-    return el ? el.value.trim().toLowerCase() : '';
-  });
-  const err = document.getElementById('rec-err');
-  if (err) { err.style.color='var(--text2)'; err.textContent='🔍 Verifica...'; }
-  await window.Hardware?.recoverWithWords(words);
-}
-
-// ─── DOT HELPERS ──────────────────────────────────────
-function updDots(dotId, pfx, n) {
-  for (let i=0; i<6; i++) {
-    const el = document.getElementById(pfx+i);
-    if (el) el.className = 'dot' + (i<n?' on':'');
-  }
-}
-function setDotsState(dotId, pfx, state) {
-  for (let i=0; i<6; i++) {
-    const el = document.getElementById(pfx+i);
-    if (el) el.className = 'dot ' + state;
-  }
-}
-
-// ─── PIN PAD TOUCH ────────────────────────────────────
-const KEY_FNS = { lockKey, lockDel, setupKey, setupDel, confirmKey, confirmDel };
-let _lastTouch = 0;
-document.addEventListener('touchstart', e => {
-  const key = e.target.closest('.key');
-  if (!key || key.classList.contains('empty')) return;
-  e.preventDefault();
-  _lastTouch = Date.now();
-  key.classList.add('pressed');
-  setTimeout(() => key.classList.remove('pressed'), 120);
-  if (navigator.vibrate) navigator.vibrate(8);
-  const fn = key.dataset.fn, v = key.dataset.v;
-  if (fn && KEY_FNS[fn]) v ? KEY_FNS[fn](v) : KEY_FNS[fn]();
-}, {passive:false});
-document.addEventListener('click', e => {
-  if (Date.now() - _lastTouch < 500) return;
-  const key = e.target.closest('.key');
-  if (!key || key.classList.contains('empty')) return;
-  const fn = key.dataset.fn, v = key.dataset.v;
-  if (fn && KEY_FNS[fn]) v ? KEY_FNS[fn](v) : KEY_FNS[fn]();
-});
-
-// ─── NAVIGATION ───────────────────────────────────────
-function openMap() {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById('map-screen').classList.add('active');
-  setTimeout(() => { window.MapModule?.init(); window.MapModule?.invalidate?.(); }, 300);
-}
-function openNotes() {
-  document.getElementById('notes-screen').classList.add('open');
-  document.getElementById('notes-fab').classList.add('visible');
-  window.NotesModule?.load();
-}
-function openChat() { document.getElementById('chat-screen').classList.add('open'); }
-function openSettings() { document.getElementById('settings-screen').classList.add('open'); }
-function openCalendar() {
-  document.getElementById('calendar-screen').classList.add('open');
-  window.CalendarModule?.load();
-}
-function closeSection(id) {
-  document.getElementById(id)?.classList.remove('open');
-  document.getElementById('notes-fab')?.classList.remove('visible');
-  if (id === 'map-screen') {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById('home-screen').classList.add('active');
-  }
-}
-
-// Back gesture
-window.addEventListener('popstate', () => {
-  ['notes-screen','chat-screen','settings-screen','calendar-screen',
-   'trips-panel','fav-modal','cal-event-form'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) { el.classList.remove('open'); }
-  });
-  document.getElementById('note-editor')?.classList.remove('open');
-  document.getElementById('notes-fab')?.classList.remove('visible');
-});
-history.pushState({}, '');
-
-// ─── HOME TIME ────────────────────────────────────────
-function updateHomeTime() {
-  const el = document.getElementById('home-time');
-  if (!el) return;
-  const n = new Date();
-  el.textContent = n.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}) +
-    ' · ' + n.toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'});
-}
-setInterval(updateHomeTime, 30000);
+// Init
+Onboarding.init();
+Navigation.init();
 </script>
 
-
+<!-- SYNC helpers (Arweave + Arbitrum) -->
 <script>
-// ─── SYNC HELPERS ─────────────────────────────────────
 let _syncEncBuffer = null;
 
 function onSyncEncSelected(inp) {
@@ -1345,7 +1108,7 @@ function onSyncEncSelected(inp) {
   reader.onload = e => {
     _syncEncBuffer = e.target.result;
     document.getElementById('sync-arweave-btn').disabled = false;
-    document.getElementById('sync-arweave-status').textContent = 
+    document.getElementById('sync-arweave-status').textContent =
       `File: ${file.name} (${Math.round(file.size/1024)} KB)`;
     document.getElementById('sync-arweave-status').style.color = 'var(--text2)';
   };
@@ -1355,36 +1118,28 @@ function onSyncEncSelected(inp) {
 async function syncAnchorBackup() {
   if (!_syncEncBuffer) return;
   showSyncOverlay('⏳', 'Upload in corso...', 'Caricamento su Arweave...');
-  
-  // Ascolta risposta
   const unsubOk = window.__State?.once('SYNC_ARWEAVE_COMPLETE', ({ txId, url, sizeKB }) => {
     unsubErr();
-    showSyncOverlay('✅', 'Anchored!', 
-      `File permanentemente archiviato (${sizeKB} KB)`, url, txId.slice(0,8)+'...');
+    showSyncOverlay('✅', 'Anchored!', `File permanentemente archiviato (${sizeKB} KB)`, url, txId.slice(0,8)+'...');
   });
   const unsubErr = window.__State?.once('SYNC_ARWEAVE_ERROR', ({ error }) => {
     unsubOk();
     showSyncOverlay('❌', 'Errore upload', error);
     setTimeout(() => document.getElementById('sync-tx-overlay').style.display='none', 3000);
   });
-
   window.SyncModule?.anchorBackup(_syncEncBuffer);
 }
 
 async function syncRegisterAlias() {
   const alias = document.getElementById('sync-alias-input')?.value.trim();
   if (!alias) return;
-  
   const status = document.getElementById('sync-alias-status');
   if (status) { status.textContent = '🔍 Verifica disponibilità...'; status.style.color='var(--text2)'; }
-  
   showSyncOverlay('⏳', `Registrazione @${alias}`, 'Il Paymaster sta sponsorizzando il gas...');
-
   const unsubOk = window.__State?.once('SYNC_REG_COMPLETE', ({ alias, txHash, explorerUrl }) => {
     unsubErr();
     if (status) { status.textContent = `✅ @${alias} registrato`; status.style.color='var(--green)'; }
-    showSyncOverlay('✅', `@${alias} registrato!`,
-      'Il tuo alias è ora sulla blockchain.', explorerUrl, txHash.slice(0,10)+'...');
+    showSyncOverlay('✅', `@${alias} registrato!`, 'Il tuo alias è ora sulla blockchain.', explorerUrl, txHash.slice(0,10)+'...');
     document.getElementById('sync-alias-panel').classList.remove('open');
   });
   const unsubErr = window.__State?.once('SYNC_REG_ERROR', ({ error }) => {
@@ -1392,7 +1147,6 @@ async function syncRegisterAlias() {
     if (status) { status.textContent = '❌ ' + error; status.style.color='var(--red)'; }
     document.getElementById('sync-tx-overlay').style.display = 'none';
   });
-
   window.SyncModule?.registerAlias(alias, 'placeholder_pubkey');
 }
 
@@ -1400,13 +1154,12 @@ function showSyncOverlay(icon, title, msg, url, txShort) {
   document.getElementById('sync-tx-icon').textContent  = icon;
   document.getElementById('sync-tx-title').textContent = title;
   document.getElementById('sync-tx-msg').textContent   = msg;
-  const linkDiv = document.getElementById('sync-tx-link');
+  const linkDiv  = document.getElementById('sync-tx-link');
   const closeBtn = document.getElementById('sync-tx-close');
   if (url) {
     document.getElementById('sync-tx-explorer').href = url;
-    document.getElementById('sync-tx-explorer').textContent = 
-      `${txShort || 'Vedi'} su explorer →`;
-    linkDiv.style.display = 'block';
+    document.getElementById('sync-tx-explorer').textContent = `${txShort || 'Vedi'} su explorer →`;
+    linkDiv.style.display  = 'block';
     closeBtn.style.display = 'block';
   } else {
     linkDiv.style.display  = 'none';
@@ -1416,60 +1169,11 @@ function showSyncOverlay(icon, title, msg, url, txShort) {
 }
 </script>
 
-<!-- ENTRY POINT ES MODULE -->
-<script type="module">
-// ── Importa TUTTO in ordine corretto ──────────────────
-import State    from './state.js';
-import Hardware from './hardware.js';
-import './crypto.js';
-import './db.js';
-import './backup.js';
-import './calendar.js';
-import UI       from './ui.js';
-import './map.js';
-import './notes.js';
-import './chat.js';
-import './boot.js';   // boot.js si avvia da solo (chiama boot() internamente)
-
-// Esponi per gli script inline (PIN pad, wizard)
-window.Hardware = Hardware;
-
-// Ascolta CRYPTO_KEY_DERIVED per mostrare le 12 parole nel wizard
-State.subscribe('CRYPTO_KEY_DERIVED', ({ isSetup, words }) => {
-  if (!isSetup || !words) return;
-  window._onWordsReady?.(words);
-});
-
-// Ascolta errori PIN
-State.subscribe('AUTH_FAILED', () => {
-  window.pinError?.();
-});
-</script>
-
-<!-- Mostra le 12 parole quando arrivano -->
-<script>
-window._onWordsReady = function(words) {
-  window._recovWords_global = words;
-  // Aggiorna la variabile locale del wizard
-  if (typeof _recovWords !== 'undefined') _recovWords = words;
-  const grid = document.getElementById('phrase-grid');
-  if (grid) {
-    grid.innerHTML = words.map((w,i) =>
-      `<div class="phrase-word">
-        <span class="pnum">${String(i+1).padStart(2,'0')}</span>
-        <span class="pword">${w}</span>
-      </div>`
-    ).join('');
-  }
-  showWizStep('step-phrase');
-};
-</script>
-
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js')
-      .then(r => console.log('[sw] OK'))
+      .then(() => console.log('[sw] OK'))
       .catch(e => console.warn('[sw]', e));
   });
 }
