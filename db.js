@@ -84,11 +84,13 @@ const StorageManager = (() => {
 
   // ─── ASCOLTO EVENTI DI SISTEMA ────────────────────────
 
-  State.subscribe('CRYPTO_KEY_DERIVED', async () => {
+  State.subscribe('CRYPTO_KEY_DERIVED', async ({ isSetup }) => {
     try {
       await initDB();
       State.dispatch('STORAGE_MOUNTED');
-      State.dispatch('APP_READY');
+      // Durante il setup non entriamo nell'app — aspettiamo
+      // che l'utente verifichi le 12 parole (INTENT_SETUP_COMPLETE)
+      if (!isSetup) State.dispatch('APP_READY');
       // Avvia GC in background — non blocca l'app
       setTimeout(() => _garbageCollect(), 5000);
     } catch (err) {

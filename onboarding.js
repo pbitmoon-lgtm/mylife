@@ -213,6 +213,7 @@ const Onboarding = (() => {
 
   function finishSetup() {
     Hardware.markBackupVerified();
+    State.dispatch('APP_READY');
   }
 
   // ─── PIN PAD TOUCH/CLICK ──────────────────────────────
