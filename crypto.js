@@ -87,14 +87,26 @@ const CryptoEngine = (() => {
       await deriveMasterKey(rawBytes);
       console.log('[crypto] master key derivata');
 
-      // Se è il setup, cifra il seed e lo persiste
       if (isSetup && seed) {
+        // Setup: cifra e persisti il seed
         const encSeed = await encryptBuffer(seed);
-        State.dispatch('CRYPTO_PERSIST_SEED', {
-          encryptedSeed: Array.from(encSeed)
-        });
-        // Rende il seed disponibile al wallet module (solo durante setup)
+        State.dispatch('CRYPTO_PERSIST_SEED', { encryptedSeed: Array.from(encSeed) });
+        // Rendi seed disponibile al wallet
         State.dispatch('SEED_AVAILABLE', { seed });
+      } else {
+        // Login normale: decripta il seed cifrato salvato
+        // Il seed cifrato è nel localStorage — lo leggiamo e decriptiamo
+        try {
+          const userRaw = localStorage.getItem('ml_user_v4');
+          const user    = userRaw ? JSON.parse(userRaw) : null;
+          if (user?.encryptedSeed) {
+            const decrypted = await decryptBuffer(new Uint8Array(user.encryptedSeed));
+            const seed      = new Uint8Array(decrypted);
+            State.dispatch('SEED_AVAILABLE', { seed });
+          }
+        } catch (e) {
+          console.warn('[crypto] impossibile decriptare seed per wallet:', e.message);
+        }
       }
 
       State.dispatch('CRYPTO_KEY_DERIVED', { isSetup, words });

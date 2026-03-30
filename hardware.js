@@ -227,17 +227,38 @@ const Hardware = (() => {
       return;
     }
 
-    // Se abbiamo encryptedSeed, verifica il PIN crittograficamente
+    const rawBytes = await pinToBytes(pin, deviceId);
+
     if (user.encryptedSeed) {
       const ok = await verifyPin(pin, deviceId, user.encryptedSeed);
       if (!ok) {
         State.dispatch('AUTH_FAILED', { reason: 'wrong_pin' });
         return;
       }
+      // Decifra seed per wallet embedded
+      try {
+        const km = await crypto.subtle.importKey(
+          'raw', rawBytes, { name: 'HKDF' }, false, ['deriveKey']
+        );
+        const key = await crypto.subtle.deriveKey(
+          { name: 'HKDF', hash: 'SHA-256',
+            salt: new TextEncoder().encode('MyLife:domain:v4'),
+            info: new TextEncoder().encode('MyLife Master Key v4') },
+          km, { name: 'AES-GCM', length: 256 }, false, ['decrypt']
+        );
+        const buf  = new Uint8Array(user.encryptedSeed);
+        const iv   = buf.slice(0, 12);
+        const ct   = buf.slice(12);
+        const seedBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+        const seed = new Uint8Array(seedBuf);
+        State.dispatch('AUTH_SUCCESS_PRF', { rawBytes, seed, isSetup: false });
+        return;
+      } catch {
+        State.dispatch('AUTH_FAILED', { reason: 'wrong_pin' });
+        return;
+      }
     }
 
-    // PIN verificato (o nessun seed da verificare — primo unlock dopo setup)
-    const rawBytes = await pinToBytes(pin, deviceId);
     State.dispatch('AUTH_SUCCESS_PRF', { rawBytes, isSetup: false });
   }
 

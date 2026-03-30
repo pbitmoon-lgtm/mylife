@@ -12,6 +12,8 @@ import './db.js';
 import './backup.js';
 import './calendar.js';
 import './sync.js';
+import './wallet.js';
+import './marketplace.js';
 
 async function boot() {
   console.log('[boot] avvio in corso...');
